@@ -6,7 +6,42 @@
 
 ![cover](cover.jpg)
 
-## 📫 API 📫
+## Features
+
+Temper supports two mutually exclusive backends via feature flags:
+
+- **`ethereum`** (default): Standard EVM simulation for Ethereum and EVM-compatible chains (Arbitrum, Optimism, Base, Polygon, BSC, etc.)
+- **`tempo`**: Tempo chain simulation with TIP-20 precompile support for native stablecoins
+
+### Tempo Chain Features
+
+When built with the `tempo` feature, Temper supports:
+
+- **TIP-20 Precompiles**: Native stablecoin addresses (`0x20c0...`) are automatically handled with proper storage access
+- **Batch Transactions**: Execute multiple calls in a single transaction (Tempo type 0x76)
+- **Fee Sponsorship**: Allow a `feePayer` to cover gas costs for the sender
+
+## Building
+
+```bash
+# Build with ethereum feature (default)
+cargo build
+
+# Build with tempo feature
+cargo build --no-default-features --features tempo
+```
+
+## Testing
+
+```bash
+# Run ethereum tests
+cargo test --no-default-features --features ethereum
+
+# Run tempo tests
+cargo test --no-default-features --features tempo
+```
+
+## API
 
 ### POST /api/v1/simulate
 
@@ -21,7 +56,7 @@ Example body:
   "chainId": 1,
   "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
   "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-  "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a0",
+  "data": "0xffa2ca3b...",
   "gasLimit": 500000,
   "value": "100000",
   "blockNumber": 16784600
@@ -45,6 +80,44 @@ Notes:
 
 - `blockNumber` can be omitted and the latest block will be used, however providing a `blockNumber` is recommended where possible to use the cache.
 
+### POST /api/v1/simulate (Tempo Batch Transactions)
+
+When using the `tempo` feature, you can simulate batch transactions with optional fee sponsorship:
+
+```json
+{
+  "chainId": 42429,
+  "from": "0x1234567890123456789012345678901234567890",
+  "gasLimit": 500000,
+  "feePayer": "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "calls": [
+    {
+      "to": "0x20c0000000000000000000000000000000000000",
+      "data": "0x70a08231..."
+    },
+    {
+      "to": "0x20c0000000000000000000000000000000000001",
+      "data": "0xa9059cbb...",
+      "value": "0"
+    }
+  ]
+}
+```
+
+Response includes individual call results:
+
+```json
+{
+  "gasUsed": 85000,
+  "blockNumber": 12345,
+  "success": true,
+  "callResults": [
+    { "success": true, "gasUsed": 25000, "returnData": "0x...", "exitReason": "Return" },
+    { "success": true, "gasUsed": 60000, "returnData": "0x...", "exitReason": "Return" }
+  ]
+}
+```
+
 ### POST /api/v1/simulate-bundle
 
 Simulates a bundle of transactions in order against the same EVM.
@@ -59,7 +132,7 @@ Example body:
     "chainId": 1,
     "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
     "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-    "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a0",
+    "data": "0xffa2ca3b...",
     "gasLimit": 500000,
     "value": "100000",
     "blockNumber": 16784600
@@ -126,7 +199,7 @@ Example body:
     "chainId": 1,
     "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
     "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-    "data": "0xffa2ca3b44eea7c8e659973cbdf476546e9e6adfd1c580700537e52ba7124933a97904ea000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001d0e30db00300ffffffffffffc02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000186a0",
+    "data": "0xffa2ca3b...",
     "gasLimit": 500000,
     "value": "100000",
     "blockNumber": 16784600
@@ -172,28 +245,24 @@ Example response:
 
 If you set an `API_KEY` environment variable then all calls to the API must be accompanied by a `X-API-KEY` header which contains this API Key.
 
-## 🏃‍♂️ Running 🏃‍♂️
+## Running
 
 ### Locally
 
 Copy `.env.example` to `.env`, fill out required values and run:
 
 ```bash
-$ cargo run
+# Run with ethereum feature (default)
+cargo run
+
+# Run with tempo feature
+cargo run --no-default-features --features tempo
 ```
 
 If you want the server to restart on any code changes run:
 
 ```bash
-$ cargo watch -x run
-```
-
-## 🧪 Test 🧪
-
-Run:
-
-```bash
-$ cargo test
+cargo watch -x run
 ```
 
 ### Manual Testing
@@ -201,22 +270,70 @@ $ cargo test
 `body.json` contains a simple request in the root of the project so once the API is running you can just run:
 
 ```bash
-$ curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate
+curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate
 ```
 
 If you have `jq` installed, you can run this to see pretty traces:
 
 ```bash
-$ curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate | jq -r ".formattedTrace"
+curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate | jq -r ".formattedTrace"
 ```
 
-## 🧭 Roadmap 🧭
+## Supported Chains
+
+### Ethereum Feature
+- Ethereum Mainnet (1)
+- Arbitrum (42161)
+- Optimism (10)
+- Base (8453)
+- Polygon (137)
+- BSC (56)
+- Gnosis (100)
+- Avalanche C-Chain (43114)
+- Linea (59144)
+- HyperEVM (999)
+
+### Tempo Feature
+- Tempo Testnet (42429)
+
+## Environment Variables
+
+Configure RPC endpoints in `.env`:
+
+```bash
+# Ethereum chains
+RPC_URL_1=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+RPC_URL_42161=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
+RPC_URL_10=https://opt-mainnet.g.alchemy.com/v2/YOUR_KEY
+# ... etc
+
+# Tempo chain
+RPC_URL_42429=https://rpc.tempo.xyz
+```
+
+## Architecture
+
+```
+src/
+├── evm/
+│   ├── mod.rs          # Feature-gated module exports
+│   ├── ethereum.rs     # Standard foundry EVM backend
+│   └── tempo.rs        # Tempo-foundry EVM backend with TIP-20 support
+├── simulation.rs       # Simulation logic and API handlers
+├── tip20.rs           # TIP-20 precompile bytecode and utilities
+├── config.rs          # Configuration and environment handling
+├── errors.rs          # Error types and rejection handling
+└── lib.rs             # Library exports and route setup
+```
+
+## Roadmap
 
 - [x] Support any RPC endpoint, not just Alchemy
+- [x] Tempo chain support with TIP-20 precompiles
+- [x] Batch transaction simulation
+- [x] Fee sponsorship simulation
 - [ ] Connect to local node via IPC
 - [ ] Connect to local [reth](https://github.com/paradigmxyz/reth/) DB
-- [ ] Support simulating a bundle of transactions against different blocks, applying state as the simulation progresses. Would help support https://github.com/paradigmxyz/reth/issues/2018
-- [ ] Support more authentication methods
 
 ### Contributing
 
@@ -228,15 +345,25 @@ $ curl -H "Content-Type: application/json" --data @tests/body.json http://localh
 export type SimulationRequest = {
   chainId: number;
   from: string;
-  to: string;
+  to?: string;           // Optional for batch transactions
   data?: string;
   gasLimit: number;
-  value: string;
+  value?: string;
   accessList?: AccessListItem[];
-  blockNumber?: number; // if not specified, latest used,
-  blockTimestamp?: number; // if not specified, timestamp of latest block is used,
+  blockNumber?: number;
+  blockTimestamp?: number;
   stateOverrides?: Record<string, StateOverride>;
   formatTrace?: boolean;
+  // Tempo-specific fields (tempo feature only)
+  calls?: TempoCall[];   // Batch calls
+  feePayer?: string;     // Fee sponsor address
+  feeToken?: string;     // ERC20 token for gas payment
+};
+
+export type TempoCall = {
+  to: string;
+  data?: string;
+  value?: string;
 };
 
 export type AccessListItem = {
@@ -260,8 +387,17 @@ export type SimulationResponse = {
   trace: CallTrace[];
   logs?: Log[];
   exitReason?: InstructionResult;
-  bytes: string;
+  returnData: string;
   formattedTrace?: string;
+  callResults?: CallResult[];  // For batch transactions
+};
+
+export type CallResult = {
+  success: boolean;
+  gasUsed: number;
+  returnData: string;
+  exitReason: InstructionResult;
+  logs: Log[];
 };
 
 export type Log = {
@@ -294,7 +430,7 @@ export enum InstructionResult {
   SelfDestruct,
 
   // revert code
-  Revert, // revert opcode
+  Revert,
   CallTooDeep,
   OutOfFund,
 
@@ -314,21 +450,19 @@ export enum InstructionResult {
   PrevrandaoNotSet,
   GasPriceLessThenBasefee,
   CallerGasLimitMoreThenBlock,
-  /// EIP-3607 Reject transactions from senders with deployed code
   RejectCallerWithCode,
   LackOfFundForGasLimit,
   CreateCollision,
   OverflowPayment,
   PrecompileError,
   NonceOverflow,
-  /// Create init code exceeds limit (runtime).
   CreateContractLimit,
-  /// Error on created contract that begins with EF
   CreateContractWithEF,
 }
 ```
 
-## 🙏 Thanks 🙏
+## Thanks
 
- - Leverages a lot of crates from [Foundry](https://github.com/foundry-rs/foundry)
+ - Leverages crates from [Foundry](https://github.com/foundry-rs/foundry)
+ - Uses [tempo-foundry](https://github.com/tempoxyz/tempo-foundry) for Tempo chain support
  - Inspired by [gakonst's example pyrevm](https://github.com/gakonst/pyrevm)
