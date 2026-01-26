@@ -84,11 +84,18 @@ header h1 {
 
 /* Balance Changes Banner */
 .balance-changes {
-    background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(34, 211, 238, 0.08));
-    border: 1px solid rgba(74, 222, 128, 0.2);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.25rem 1.5rem;
     margin-bottom: 1.5rem;
+}
+
+.balance-changes-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
 }
 
 .balance-changes-title {
@@ -96,44 +103,89 @@ header h1 {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--accent-green);
-    margin-bottom: 1rem;
+    color: var(--accent-cyan);
+}
+
+.balance-changes-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
 }
 
 .balance-changes-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
 .balance-change-item {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-secondary);
-    border-radius: 8px;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    border-radius: 10px;
     border: 1px solid var(--border-color);
+    transition: border-color 0.15s ease;
 }
 
-.balance-change-icon {
-    width: 36px;
-    height: 36px;
+.balance-change-item:hover {
+    border-color: var(--text-muted);
+}
+
+.balance-change-icon-wrapper {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: var(--bg-tertiary);
+    background: var(--bg-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.balance-change-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: white;
+}
+
+.token-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.token-logo-fallback {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
 }
 
 .balance-change-info {
     flex: 1;
+    min-width: 0;
 }
 
 .balance-change-token {
-    font-weight: 500;
-    font-size: 0.875rem;
+    font-weight: 600;
+    font-size: 1rem;
     color: var(--text-primary);
 }
 
@@ -141,12 +193,39 @@ header h1 {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.75rem;
     color: var(--text-muted);
+    cursor: help;
+}
+
+.balance-change-amount-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.25rem;
+}
+
+.balance-change-direction {
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.125rem 0.5rem;
+    border-radius: 4px;
+}
+
+.balance-change-direction.positive {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--accent-green);
+}
+
+.balance-change-direction.negative {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--accent-red);
 }
 
 .balance-change-amount {
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 1rem;
 }
 
 .balance-change-amount.positive {
@@ -155,6 +234,29 @@ header h1 {
 
 .balance-change-amount.negative {
     color: var(--accent-red);
+}
+
+/* Responsive balance changes */
+@media (max-width: 600px) {
+    .balance-change-item {
+        padding: 0.875rem 1rem;
+    }
+
+    .balance-change-icon-wrapper,
+    .balance-change-icon,
+    .token-logo,
+    .token-logo-fallback {
+        width: 32px;
+        height: 32px;
+    }
+
+    .balance-change-token {
+        font-size: 0.875rem;
+    }
+
+    .balance-change-amount {
+        font-size: 0.875rem;
+    }
 }
 
 /* Simulation Meta */

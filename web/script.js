@@ -38,22 +38,106 @@
         return known ? known.inputs : null;
     }
 
-    // Native token symbols by chain ID
+    // Native token config by chain ID
     const NATIVE_TOKENS = {
-        1: 'ETH',
-        10: 'ETH',
-        56: 'BNB',
-        100: 'xDAI',
-        137: 'POL',
-        250: 'FTM',
-        999: 'HYPE',
-        8453: 'ETH',
-        42161: 'ETH',
-        43114: 'AVAX',
+        1: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png' },
+        10: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png' },
+        56: { symbol: 'BNB', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png' },
+        100: { symbol: 'xDAI', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/xdai/info/logo.png' },
+        137: { symbol: 'POL', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png' },
+        250: { symbol: 'FTM', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png' },
+        999: { symbol: 'HYPE', decimals: 18, logo: null },
+        8453: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png' },
+        42161: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png' },
+        43114: { symbol: 'AVAX', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png' },
     };
 
     function getNativeToken() {
-        return NATIVE_TOKENS[currentChainId] || 'ETH';
+        return NATIVE_TOKENS[currentChainId]?.symbol || 'ETH';
+    }
+
+    function getNativeTokenConfig() {
+        return NATIVE_TOKENS[currentChainId] || { symbol: 'ETH', decimals: 18, logo: null };
+    }
+
+    // Token metadata cache
+    const tokenMetadataCache = new Map();
+
+    // Chain-specific token list URLs
+    const TOKEN_LIST_URLS = {
+        1: 'https://tokens.coingecko.com/uniswap/all.json',
+        137: 'https://tokens.coingecko.com/polygon-pos/all.json',
+        42161: 'https://tokens.coingecko.com/arbitrum-one/all.json',
+        10: 'https://tokens.coingecko.com/optimistic-ethereum/all.json',
+        8453: 'https://tokens.coingecko.com/base/all.json',
+    };
+
+    // Well-known tokens (fallback when token list fails)
+    const WELL_KNOWN_TOKENS = {
+        // Ethereum mainnet
+        '1:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': { symbol: 'WETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png' },
+        '1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { symbol: 'USDC', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png' },
+        '1:0xdac17f958d2ee523a2206206994597c13d831ec7': { symbol: 'USDT', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png' },
+        '1:0x6b175474e89094c44da98b954eedeac495271d0f': { symbol: 'DAI', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EesdeAC495271d0F/logo.png' },
+        '1:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': { symbol: 'WBTC', decimals: 8, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png' },
+        // Common across chains
+        'usdc': { symbol: 'USDC', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png' },
+        'usdt': { symbol: 'USDT', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png' },
+        'weth': { symbol: 'WETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2/logo.png' },
+    };
+
+    // Fetch token metadata (symbol, decimals, logo)
+    async function fetchTokenMetadata(tokenAddress, chainId) {
+        const cacheKey = `${chainId}:${tokenAddress.toLowerCase()}`;
+        if (tokenMetadataCache.has(cacheKey)) {
+            return tokenMetadataCache.get(cacheKey);
+        }
+
+        // Check well-known tokens first
+        if (WELL_KNOWN_TOKENS[cacheKey]) {
+            tokenMetadataCache.set(cacheKey, WELL_KNOWN_TOKENS[cacheKey]);
+            return WELL_KNOWN_TOKENS[cacheKey];
+        }
+
+        // Try to get from contract name cache (might have symbol in name)
+        const contractInfo = contractCache.get(cacheKey);
+        if (contractInfo?.name) {
+            // Use contract name as fallback symbol
+            const metadata = {
+                symbol: contractInfo.name.length <= 10 ? contractInfo.name : contractInfo.name.slice(0, 8),
+                decimals: 18,
+                logo: null
+            };
+            tokenMetadataCache.set(cacheKey, metadata);
+            return metadata;
+        }
+
+        // Default fallback
+        const fallback = { symbol: 'TOKEN', decimals: 18, logo: null };
+        tokenMetadataCache.set(cacheKey, fallback);
+        return fallback;
+    }
+
+    // Format token amount with proper decimals
+    function formatTokenAmount(rawAmount, decimals = 18) {
+        try {
+            const amount = BigInt(rawAmount);
+            const divisor = BigInt(10 ** decimals);
+            const intPart = amount / divisor;
+            const fracPart = amount % divisor;
+
+            // Format the fractional part with leading zeros
+            let fracStr = fracPart.toString().padStart(decimals, '0');
+            // Trim trailing zeros but keep at least 2 decimal places for readability
+            fracStr = fracStr.replace(/0+$/, '');
+            if (fracStr.length < 2) fracStr = fracStr.padEnd(2, '0');
+            if (fracStr.length > 6) fracStr = fracStr.slice(0, 6);
+
+            const formatted = `${intPart.toLocaleString()}.${fracStr}`;
+            return formatted;
+        } catch {
+            return rawAmount;
+        }
     }
 
     // Extract revert reason from trace (recursively searches call tree)
@@ -884,97 +968,234 @@
         return node;
     }
 
-    function renderBalanceChanges(simulation) {
-        const container = document.createElement('div');
-        container.className = 'balance-changes';
-
-        const title = document.createElement('div');
-        title.className = 'balance-changes-title';
-        title.textContent = 'Balance Changes';
-        container.appendChild(title);
-
-        const grid = document.createElement('div');
-        grid.className = 'balance-changes-grid';
-
-        // Get value from trace if available
+    // Parse balance changes from simulation logs
+    function parseBalanceChanges(simulation) {
         const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
-        const traceValue = trace?.value;
-        const traceFrom = trace?.from;
+        const txFrom = (trace?.from || '').toLowerCase();
+        const txTo = (trace?.to || '').toLowerCase();
 
-        // Show native token value transfer if any
-        if (traceValue && traceValue !== '0' && traceValue !== '0x0' && traceValue !== '0x') {
-            const ethItem = document.createElement('div');
-            ethItem.className = 'balance-change-item';
+        // Track balance changes per address per token
+        // Key: `${address}:${tokenAddress}` (tokenAddress = 'native' for native token)
+        const changes = new Map();
 
-            const icon = document.createElement('div');
-            icon.className = 'balance-change-icon';
-            icon.textContent = 'Ξ';
-            ethItem.appendChild(icon);
-
-            const info = document.createElement('div');
-            info.className = 'balance-change-info';
-            const token = document.createElement('div');
-            token.className = 'balance-change-token';
-            token.textContent = getNativeToken();
-            info.appendChild(token);
-            const addr = document.createElement('div');
-            addr.className = 'balance-change-address';
-            addr.textContent = traceFrom ? traceFrom.slice(0, 10) + '...' : '';
-            info.appendChild(addr);
-            ethItem.appendChild(info);
-
-            const amount = document.createElement('div');
-            amount.className = 'balance-change-amount negative';
-            try {
-                const wei = BigInt(traceValue);
-                const eth = Number(wei) / 1e18;
-                amount.textContent = `-${eth.toFixed(6)} ${getNativeToken()}`;
-            } catch {
-                amount.textContent = traceValue;
+        // Helper to add/update a change
+        const addChange = (address, tokenAddress, amount, direction) => {
+            const key = `${address.toLowerCase()}:${tokenAddress.toLowerCase()}`;
+            if (!changes.has(key)) {
+                changes.set(key, { address: address.toLowerCase(), tokenAddress: tokenAddress.toLowerCase(), amount: 0n });
             }
-            ethItem.appendChild(amount);
+            const change = changes.get(key);
+            change.amount += direction === 'in' ? BigInt(amount) : -BigInt(amount);
+        };
 
-            grid.appendChild(ethItem);
+        // Native token transfer
+        const traceValue = trace?.value;
+        if (traceValue && traceValue !== '0' && traceValue !== '0x0' && traceValue !== '0x') {
+            try {
+                const value = BigInt(traceValue);
+                if (value > 0n) {
+                    addChange(txFrom, 'native', value, 'out');
+                    if (txTo) addChange(txTo, 'native', value, 'in');
+                }
+            } catch {}
         }
 
-        // Parse Transfer events from logs
+        // ERC20 Transfer events
         const transferTopic = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+        // ERC721 Transfer has same topic but different data structure
+
         if (simulation.logs && simulation.logs.length > 0) {
             for (const log of simulation.logs) {
                 const topics = log.topics || [];
-                if (topics[0] === transferTopic) {
-                    const item = document.createElement('div');
-                    item.className = 'balance-change-item';
+                if (topics[0] !== transferTopic) continue;
+                if (topics.length < 3) continue; // Need from, to in topics
 
-                    const icon = document.createElement('div');
-                    icon.className = 'balance-change-icon';
-                    icon.textContent = '🪙';
-                    item.appendChild(icon);
+                const tokenAddress = log.address?.toLowerCase();
+                if (!tokenAddress) continue;
 
-                    const info = document.createElement('div');
-                    info.className = 'balance-change-info';
-                    const token = document.createElement('div');
-                    token.className = 'balance-change-token';
-                    token.textContent = 'ERC20';
-                    info.appendChild(token);
-                    const addr = document.createElement('div');
-                    addr.className = 'balance-change-address';
-                    addr.textContent = log.address ? log.address.slice(0, 10) + '...' : '';
-                    info.appendChild(addr);
-                    item.appendChild(info);
+                // ERC20: Transfer(address indexed from, address indexed to, uint256 value)
+                // topics[1] = from, topics[2] = to, data = value
+                const from = '0x' + (topics[1] || '').slice(-40).toLowerCase();
+                const to = '0x' + (topics[2] || '').slice(-40).toLowerCase();
 
-                    const amount = document.createElement('div');
-                    amount.className = 'balance-change-amount positive';
-                    amount.textContent = 'Transfer';
-                    item.appendChild(amount);
+                // Get amount from data (for ERC20) or topics[3] (for ERC721)
+                let amount;
+                try {
+                    if (log.data && log.data !== '0x' && log.data.length > 2) {
+                        amount = BigInt(log.data);
+                    } else if (topics[3]) {
+                        // ERC721 - tokenId in topics[3], treat as amount of 1
+                        amount = 1n;
+                    } else {
+                        amount = 0n;
+                    }
+                } catch {
+                    amount = 0n;
+                }
 
-                    grid.appendChild(item);
+                if (amount > 0n) {
+                    addChange(from, tokenAddress, amount, 'out');
+                    addChange(to, tokenAddress, amount, 'in');
                 }
             }
         }
 
-        if (grid.children.length === 0) {
+        // Filter to only show changes for addresses involved in the tx (from/to)
+        // and convert to array sorted by relevance
+        const relevantAddresses = new Set([txFrom, txTo].filter(Boolean));
+        const result = [];
+
+        for (const [key, change] of changes) {
+            if (change.amount === 0n) continue;
+            if (!relevantAddresses.has(change.address)) continue;
+            result.push(change);
+        }
+
+        // Sort: tx sender first, then by absolute amount (descending)
+        result.sort((a, b) => {
+            if (a.address === txFrom && b.address !== txFrom) return -1;
+            if (b.address === txFrom && a.address !== txFrom) return 1;
+            const absA = a.amount < 0n ? -a.amount : a.amount;
+            const absB = b.amount < 0n ? -b.amount : b.amount;
+            return absB > absA ? 1 : -1;
+        });
+
+        return { changes: result, txFrom, txTo };
+    }
+
+    async function renderBalanceChanges(simulation) {
+        const { changes, txFrom } = parseBalanceChanges(simulation);
+
+        if (changes.length === 0) {
             return null;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'balance-changes';
+
+        const header = document.createElement('div');
+        header.className = 'balance-changes-header';
+
+        const title = document.createElement('div');
+        title.className = 'balance-changes-title';
+        title.textContent = 'Balance Changes';
+        header.appendChild(title);
+
+        // Show whose balance we're showing
+        const subtitle = document.createElement('div');
+        subtitle.className = 'balance-changes-subtitle';
+        subtitle.textContent = txFrom ? `for ${txFrom.slice(0, 6)}...${txFrom.slice(-4)}` : '';
+        header.appendChild(subtitle);
+
+        container.appendChild(header);
+
+        const grid = document.createElement('div');
+        grid.className = 'balance-changes-grid';
+
+        // Render each balance change
+        for (const change of changes) {
+            const item = document.createElement('div');
+            item.className = 'balance-change-item';
+
+            const isPositive = change.amount > 0n;
+            const isNative = change.tokenAddress === 'native';
+
+            // Token icon
+            const iconWrapper = document.createElement('div');
+            iconWrapper.className = 'balance-change-icon-wrapper';
+
+            if (isNative) {
+                const nativeConfig = getNativeTokenConfig();
+                if (nativeConfig.logo) {
+                    const img = document.createElement('img');
+                    img.src = nativeConfig.logo;
+                    img.alt = nativeConfig.symbol;
+                    img.className = 'token-logo';
+                    img.onerror = () => { img.style.display = 'none'; iconWrapper.textContent = 'Ξ'; };
+                    iconWrapper.appendChild(img);
+                } else {
+                    iconWrapper.className = 'balance-change-icon';
+                    iconWrapper.textContent = 'Ξ';
+                }
+            } else {
+                // Try to get token metadata
+                const metadata = await fetchTokenMetadata(change.tokenAddress, currentChainId);
+                if (metadata.logo) {
+                    const img = document.createElement('img');
+                    img.src = metadata.logo;
+                    img.alt = metadata.symbol;
+                    img.className = 'token-logo';
+                    img.onerror = () => {
+                        img.style.display = 'none';
+                        const fallback = document.createElement('div');
+                        fallback.className = 'token-logo-fallback';
+                        fallback.textContent = metadata.symbol.slice(0, 2);
+                        iconWrapper.appendChild(fallback);
+                    };
+                    iconWrapper.appendChild(img);
+                } else {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'token-logo-fallback';
+                    fallback.textContent = metadata.symbol.slice(0, 2);
+                    iconWrapper.appendChild(fallback);
+                }
+            }
+            item.appendChild(iconWrapper);
+
+            // Token info
+            const info = document.createElement('div');
+            info.className = 'balance-change-info';
+
+            const tokenName = document.createElement('div');
+            tokenName.className = 'balance-change-token';
+
+            if (isNative) {
+                tokenName.textContent = getNativeToken();
+            } else {
+                const metadata = await fetchTokenMetadata(change.tokenAddress, currentChainId);
+                tokenName.textContent = metadata.symbol;
+            }
+            info.appendChild(tokenName);
+
+            // Show token address for non-native tokens
+            if (!isNative) {
+                const addr = document.createElement('div');
+                addr.className = 'balance-change-address';
+                addr.textContent = change.tokenAddress.slice(0, 10) + '...' + change.tokenAddress.slice(-4);
+                addr.title = change.tokenAddress;
+                info.appendChild(addr);
+            }
+
+            item.appendChild(info);
+
+            // Amount with direction indicator
+            const amountWrapper = document.createElement('div');
+            amountWrapper.className = 'balance-change-amount-wrapper';
+
+            const direction = document.createElement('div');
+            direction.className = `balance-change-direction ${isPositive ? 'positive' : 'negative'}`;
+            direction.textContent = isPositive ? '↓ IN' : '↑ OUT';
+            amountWrapper.appendChild(direction);
+
+            const amount = document.createElement('div');
+            amount.className = `balance-change-amount ${isPositive ? 'positive' : 'negative'}`;
+
+            const absAmount = change.amount < 0n ? -change.amount : change.amount;
+
+            if (isNative) {
+                const nativeConfig = getNativeTokenConfig();
+                const formatted = formatTokenAmount(absAmount.toString(), nativeConfig.decimals);
+                amount.textContent = `${isPositive ? '+' : '-'}${formatted} ${nativeConfig.symbol}`;
+            } else {
+                const metadata = await fetchTokenMetadata(change.tokenAddress, currentChainId);
+                const formatted = formatTokenAmount(absAmount.toString(), metadata.decimals);
+                amount.textContent = `${isPositive ? '+' : '-'}${formatted} ${metadata.symbol}`;
+            }
+            amountWrapper.appendChild(amount);
+
+            item.appendChild(amountWrapper);
+
+            grid.appendChild(item);
         }
 
         container.appendChild(grid);
@@ -1152,7 +1373,7 @@
             }
 
             // Balance changes
-            const balanceChanges = renderBalanceChanges(simulation);
+            const balanceChanges = await renderBalanceChanges(simulation);
             if (balanceChanges) {
                 app.appendChild(balanceChanges);
             }
