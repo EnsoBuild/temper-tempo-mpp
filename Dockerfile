@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
 # Copy source
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+COPY web ./web
 
 # Build release binary
 RUN cargo build --release -p temper-server --features "ethereum"
