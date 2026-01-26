@@ -1,5 +1,5 @@
-# Build stage - using nightly for latest dependency support (1.89+)
-FROM rust:nightly-slim-bookworm AS builder
+# Build stage - rust:slim-bookworm has Rust 1.93+
+FROM rust:slim-bookworm AS builder
 
 WORKDIR /app
 
