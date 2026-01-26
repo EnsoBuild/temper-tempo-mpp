@@ -2,6 +2,20 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+/// Shared HTTP client for connection reuse
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(10)
+            .build()
+            .expect("Failed to create HTTP client")
+    })
+}
 
 /// A single execution step from structLogger
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,12 +150,10 @@ pub async fn fetch_debug_trace(
     rpc_url: &str,
     tx_hash: &str,
 ) -> Result<DebugTrace, String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
 
-    // Disable memory to keep response size manageable
-    // Function selectors for the top-level call come from transaction input
-    // For subcalls, we rely on function name decoding from 4byte.directory
-    let request = serde_json::json!({
+    // Prepare all three requests
+    let struct_logger_request = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "debug_traceTransaction",
         "params": [tx_hash, {
@@ -156,13 +168,34 @@ pub async fn fetch_debug_trace(
         "id": 1
     });
 
-    let response = client
-        .post(rpc_url)
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("RPC request failed: {}", e))?;
+    let tx_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "eth_getTransactionByHash",
+        "params": [tx_hash],
+        "id": 2
+    });
 
+    let call_tracer_request = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "debug_traceTransaction",
+        "params": [tx_hash, {
+            "tracer": "callTracer",
+            "tracerConfig": {
+                "withLog": false
+            }
+        }],
+        "id": 3
+    });
+
+    // Execute all three requests in parallel
+    let (struct_logger_result, tx_result, call_tracer_result) = tokio::join!(
+        client.post(rpc_url).json(&struct_logger_request).send(),
+        client.post(rpc_url).json(&tx_request).send(),
+        client.post(rpc_url).json(&call_tracer_request).send()
+    );
+
+    // Parse struct logger response (required)
+    let response = struct_logger_result.map_err(|e| format!("RPC request failed: {}", e))?;
     let json: serde_json::Value = response
         .json()
         .await
@@ -173,20 +206,11 @@ pub async fn fetch_debug_trace(
     }
 
     let result = json.get("result").ok_or("No result in response")?;
-
-    // Handle the structLogger format
     let mut trace: DebugTrace = serde_json::from_value(result.clone())
         .map_err(|e| format!("Failed to parse trace: {}", e))?;
 
-    // Fetch transaction details for input data
-    let tx_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "eth_getTransactionByHash",
-        "params": [tx_hash],
-        "id": 2
-    });
-
-    if let Ok(tx_response) = client.post(rpc_url).json(&tx_request).send().await {
+    // Parse transaction details (optional, for input data)
+    if let Ok(tx_response) = tx_result {
         if let Ok(tx_json) = tx_response.json::<serde_json::Value>().await {
             if let Some(tx_result) = tx_json.get("result") {
                 trace.tx_input = tx_result
@@ -205,20 +229,8 @@ pub async fn fetch_debug_trace(
         }
     }
 
-    // Fetch call tree using callTracer for input data of nested calls
-    let call_tracer_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "debug_traceTransaction",
-        "params": [tx_hash, {
-            "tracer": "callTracer",
-            "tracerConfig": {
-                "withLog": false
-            }
-        }],
-        "id": 3
-    });
-
-    if let Ok(call_response) = client.post(rpc_url).json(&call_tracer_request).send().await {
+    // Parse call tracer response (optional, for nested call data)
+    if let Ok(call_response) = call_tracer_result {
         if let Ok(call_json) = call_response.json::<serde_json::Value>().await {
             if let Some(call_result) = call_json.get("result") {
                 if let Ok(call_tree) = serde_json::from_value::<CallFrame>(call_result.clone()) {
@@ -237,7 +249,7 @@ pub async fn fetch_debug_trace_call(
     call_params: DebugCallParams,
     block_number: Option<u64>,
 ) -> Result<DebugTrace, String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     let block = block_number
         .map(|b| format!("0x{:x}", b))
@@ -297,7 +309,7 @@ pub async fn fetch_contract_source(
     address: &str,
     chain_id: u64,
 ) -> Result<Option<ContractSource>, String> {
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     // Try block explorer first for chains like HyperEVM that may not be on Sourcify
     if let Some(api_url) = get_explorer_api(chain_id) {
@@ -387,7 +399,7 @@ pub async fn fetch_contract_source(
             let mut sources: HashMap<String, String> = HashMap::new();
             let mut source_list: Vec<String> = Vec::new();
             let mut abi = serde_json::Value::Null;
-            let mut source_map = String::new();
+            let source_map = String::new();
 
             // First pass: get metadata for source map and contract info
             for file in files {
