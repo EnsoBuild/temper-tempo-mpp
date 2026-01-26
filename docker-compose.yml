@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  temper:
+    build: .
+    ports:
+      - "8089:8089"
+    environment:
+      - RUST_LOG=info
+      - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL:-}
+      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-}
+      - ARBITRUM_RPC_URL=${ARBITRUM_RPC_URL:-}
+      - BASE_RPC_URL=${BASE_RPC_URL:-}
+      - OPTIMISM_RPC_URL=${OPTIMISM_RPC_URL:-}
+      - BSC_RPC_URL=${BSC_RPC_URL:-}
+      - HYPEREVM_RPC_URL=${HYPEREVM_RPC_URL:-}
+      - DATABASE_PATH=/data/temper.db
+      - BASE_URL=${BASE_URL:-http://localhost:8089}
+    volumes:
+      - temper-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  temper-data:
+    driver: local

@@ -1,0 +1,117 @@
+---
+title: 'Introduction'
+description: 'Temper - High-performance EVM transaction simulation API'
+---
+
+# Welcome to Temper
+
+Temper is a blazing-fast EVM transaction simulation API that lets you preview transaction outcomes before sending them on-chain. Get detailed traces, gas estimates, state changes, and a visual debugger - all without spending gas.
+
+## Why Temper?
+
+<CardGroup cols={2}>
+  <Card title="Fast Simulations" icon="bolt">
+    Simulate transactions in milliseconds with our optimized Rust backend
+  </Card>
+  <Card title="Visual Debugger" icon="bug">
+    Step through execution with source code highlighting and decoded parameters
+  </Card>
+  <Card title="Multi-Chain Support" icon="link">
+    Works with Ethereum, Polygon, Arbitrum, Base, Optimism, and more
+  </Card>
+  <Card title="State Overrides" icon="code">
+    Test with custom balances, storage, and contract code
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+Simulate a transaction in seconds:
+
+```bash
+curl -X POST https://api.temper.dev/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chainId": 1,
+    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "data": "0xa9059cbb000000000000000000000000d8dA6BF26964aF9D7eEd9e03E53415D37aA960450000000000000000000000000000000000000000000000000000000005f5e100",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  }'
+```
+
+Response includes:
+
+```json
+{
+  "id": "abc123xyz",
+  "simulation_url": "https://temper.dev/simulation/abc123xyz",
+  "success": true,
+  "gas_used": 51234,
+  "logs": [...],
+  "enhanced_trace": {...}
+}
+```
+
+## Features
+
+### Transaction Simulation
+Simulate any EVM transaction and get detailed results including:
+- Success/failure status with revert reasons
+- Exact gas usage
+- Event logs with decoded parameters
+- Full call trace tree
+- State changes
+
+### Visual Simulation Viewer
+Every simulation gets a shareable URL with:
+- Transaction overview
+- Call trace visualization
+- Decoded function calls and events
+- Token transfer tracking
+- Gas breakdown
+
+### Step-by-Step Debugger
+Debug failed transactions with:
+- Source code view with syntax highlighting
+- Function-level navigation
+- Decoded input parameters
+- Call stack visualization
+- Contract source from Sourcify/Etherscan
+
+### Bundle Simulation
+Simulate multiple transactions in sequence:
+- Atomic bundle execution
+- Shared state between transactions
+- Perfect for MEV and complex DeFi strategies
+
+### Stateful Simulation
+Create persistent simulation environments:
+- Fork blockchain state
+- Execute multiple transactions
+- Inspect intermediate states
+- Perfect for testing sequences
+
+## Supported Chains
+
+| Chain | Chain ID | Status |
+|-------|----------|--------|
+| Ethereum | 1 | Supported |
+| Polygon | 137 | Supported |
+| Arbitrum | 42161 | Supported |
+| Optimism | 10 | Supported |
+| Base | 8453 | Supported |
+| BSC | 56 | Supported |
+| HyperEVM | 999 | Supported |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/simulate">
+    Explore the full API documentation
+  </Card>
+  <Card title="Quick Start Guide" icon="rocket" href="/guides/quickstart">
+    Build your first integration
+  </Card>
+</CardGroup>

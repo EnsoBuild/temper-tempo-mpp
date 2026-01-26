@@ -1,0 +1,72 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Temper",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#22D3EE",
+    "light": "#22D3EE",
+    "dark": "#0EA5E9",
+    "anchors": {
+      "from": "#22D3EE",
+      "to": "#A855F7"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "API Status",
+      "url": "https://status.temper.dev"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Dashboard",
+    "url": "https://temper.dev"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/enso/temper"
+    },
+    {
+      "name": "Community",
+      "icon": "discord",
+      "url": "https://discord.gg/enso"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "introduction",
+        "guides/quickstart"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api/simulate",
+        "api/simulate-bundle",
+        "api/stateful-simulation",
+        "api/simulation-viewer",
+        "api/debug"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/enaborodych",
+    "github": "https://github.com/enso"
+  },
+  "api": {
+    "baseUrl": "https://api.temper.dev/api/v1"
+  }
+}

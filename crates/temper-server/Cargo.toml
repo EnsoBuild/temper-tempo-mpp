@@ -1,0 +1,50 @@
+[package]
+name = "temper-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Enso Finance"]
+license = "MIT"
+description = "HTTP server for Temper simulation API"
+
+[features]
+default = ["ethereum"]
+ethereum = ["temper-core/ethereum"]
+tempo = ["temper-core/tempo"]
+
+[dependencies]
+# workspace crates
+temper-core = { path = "../temper-core" }
+temper-db = { path = "../temper-db" }
+
+# http
+warp = "0.3"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# bytes
+bytes = "1.2.1"
+hex = "0.4"
+
+# state management
+dashmap = "5.4.0"
+uuid = { version = "1.3.4", features = ["v4", "fast-rng", "serde"] }
+
+# env, logs, errors
+dotenvy = "0.15"
+log = "0.4"
+pretty_env_logger = "0.4"
+eyre = "0.6"
+
+# static file embedding
+rust-embed = "8"
+mime_guess = "2"
+
+# alloy types (for log conversion)
+alloy-primitives = "1.5.1"
+
+[dev-dependencies]
+temp-env = { version = "0.3.4", features = ["async_closure"] }

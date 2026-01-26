@@ -1,29 +1,28 @@
-//! Standard foundry EVM backend for Ethereum and EVM-compatible chains
-//! Uses latest foundry with alloy types
+//! Tempo-foundry EVM backend for Tempo chain with TIP-20 precompile support
 
 use std::collections::HashMap;
 
-use foundry_config_ethereum::{Chain, GasLimit};
-use foundry_evm_ethereum::backend::Backend;
-use foundry_evm_ethereum::executors::Executor;
-use foundry_evm_ethereum::executors::ExecutorBuilder;
-use foundry_evm_ethereum::fork::CreateFork;
-use foundry_evm_ethereum::opts::EvmOpts;
-use foundry_evm_ethereum::Env;
+use foundry_config_tempo::{Chain, GasLimit};
+use foundry_evm_tempo::backend::Backend;
+use foundry_evm_tempo::executors::Executor;
+use foundry_evm_tempo::executors::ExecutorBuilder;
+use foundry_evm_tempo::fork::CreateFork;
+use foundry_evm_tempo::opts::EvmOpts;
+use foundry_evm_tempo::Env;
 
-use foundry_evm_ethereum::traces::identifier::{ExternalIdentifier, SignaturesIdentifier};
-use foundry_evm_ethereum::traces::{
+use foundry_evm_tempo::traces::identifier::{ExternalIdentifier, SignaturesIdentifier};
+use foundry_evm_tempo::traces::{
     CallTraceArena, CallTraceDecoder, CallTraceDecoderBuilder, CallTraceNode, SparsedTraceArena,
     TraceMode,
 };
 
 // Use revm types from foundry's re-export
-use foundry_evm_ethereum::revm::database::{DatabaseCommit, DatabaseRef};
-use foundry_evm_ethereum::revm::interpreter::InstructionResult;
-use foundry_evm_ethereum::revm::primitives::Log;
+use foundry_evm_tempo::revm::database::{DatabaseCommit, DatabaseRef};
+use foundry_evm_tempo::revm::interpreter::InstructionResult;
+use foundry_evm_tempo::revm::primitives::Log;
 use alloy_primitives::{Address, Bytes, U256};
-use foundry_evm_ethereum::revm::state::{Account, AccountStatus, EvmStorageSlot};
-use foundry_evm_ethereum::revm::bytecode::Bytecode;
+use foundry_evm_tempo::revm::state::{Account, AccountStatus, EvmStorageSlot};
+use foundry_evm_tempo::revm::bytecode::Bytecode;
 
 use revm_inspectors::tracing::TraceWriter;
 
@@ -88,34 +87,43 @@ impl Evm {
         let evm_opts = EvmOpts {
             fork_url: Some(fork_url.clone()),
             fork_block_number,
-            env: foundry_evm_ethereum::opts::Env {
+            env: foundry_evm_tempo::opts::Env {
                 chain_id: None,
                 code_size_limit: None,
                 gas_price: Some(0),
                 gas_limit: GasLimit(u64::MAX),
                 ..Default::default()
             },
-            memory_limit: foundry_config_ethereum::Config::default().memory_limit,
+            memory_limit: foundry_config_tempo::Config::default().memory_limit,
             ..Default::default()
         };
+
+        let fork_env = evm_opts.evm_env().await.unwrap();
+        let default_env = fork_env.clone();
 
         let fork_opts = CreateFork {
             url: fork_url,
             enable_caching: true,
-            env: evm_opts.evm_env().await.unwrap(),
+            env: fork_env,
             evm_opts,
         };
 
-        let db = Backend::spawn(Some(fork_opts.clone())).expect("Failed to spawn backend");
+        // CRITICAL: Backend::spawn uses blocking channel operations internally.
+        // We must run it in spawn_blocking to avoid deadlocking the tokio runtime.
+        let db = tokio::task::spawn_blocking(move || {
+            Backend::spawn(Some(fork_opts)).expect("Failed to spawn backend")
+        })
+        .await
+        .expect("spawn_blocking failed");
 
         // Convert U256 gas_limit to u64 for the executor
         let gas_limit_u64: u64 = gas_limit.try_into().unwrap_or(u64::MAX);
         let builder = ExecutorBuilder::default().gas_limit(gas_limit_u64);
 
-        let mut executor = builder.build(env.unwrap_or(fork_opts.env.clone()), db);
+        let mut executor = builder.build(env.unwrap_or(default_env), db);
         executor.set_tracing(TraceMode::Call);
 
-        let foundry_config = foundry_config_ethereum::Config {
+        let foundry_config = foundry_config_tempo::Config {
             etherscan_api_key: etherscan_key,
             ..Default::default()
         };

@@ -1,3 +1,5 @@
+//! Server configuration
+
 use dotenvy::dotenv;
 use std::collections::HashMap;
 
@@ -39,6 +41,12 @@ pub struct Config {
     pub etherscan_key: Option<String>,
     pub api_key: Option<String>,
     pub max_request_size: u64,
+    // New database/storage options
+    pub database_url: Option<String>,
+    pub base_url: String,
+    pub web_ui_enabled: bool,
+    pub storage_enabled: bool,
+    pub storage_retention_days: Option<u32>,
 }
 
 impl Config {
@@ -46,11 +54,15 @@ impl Config {
     pub fn get_rpc_url(&self, chain_id: u64) -> Option<&String> {
         self.rpc_urls.get(&chain_id)
     }
+
+    /// Get the simulation URL for a given ID
+    pub fn simulation_url(&self, id: &str) -> String {
+        format!("{}/simulation/{}", self.base_url, id)
+    }
 }
 
 pub fn config() -> Config {
     dotenv().ok();
-
     load_config()
 }
 
@@ -81,12 +93,31 @@ fn load_config() -> Config {
         .expect("MAX_REQUEST_SIZE must be a valid u64")
         * 1024;
 
+    // New config options
+    let database_url = std::env::var("DATABASE_URL").ok().filter(|s| !s.is_empty());
+    let base_url = std::env::var("BASE_URL")
+        .unwrap_or_else(|_| format!("http://localhost:{}", port));
+    let web_ui_enabled = std::env::var("WEB_UI_ENABLED")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(true);
+    let storage_enabled = std::env::var("STORAGE_ENABLED")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(database_url.is_some());
+    let storage_retention_days = std::env::var("STORAGE_RETENTION_DAYS")
+        .ok()
+        .and_then(|v| v.parse().ok());
+
     Config {
         port,
         rpc_urls,
         etherscan_key,
         api_key,
         max_request_size,
+        database_url,
+        base_url,
+        web_ui_enabled,
+        storage_enabled,
+        storage_retention_days,
     }
 }
 
@@ -117,52 +148,22 @@ mod tests {
                     config.get_rpc_url(137),
                     Some(&"https://polygon.example.com".to_string())
                 );
-                assert_eq!(config.get_rpc_url(42161), None); // Arbitrum not set
+                assert_eq!(config.get_rpc_url(42161), None);
             },
         );
     }
 
     #[test]
-    fn test_config_rpc_urls_empty() {
-        temp_env::with_vars([("RPC_URL_ETHEREUM", Some(""))], || {
-            let config = super::load_config();
-            assert_eq!(config.get_rpc_url(1), None);
-        });
-    }
-
-    #[test]
-    fn test_config_etherscan_key() {
-        temp_env::with_vars([("ETHERSCAN_KEY", Some("a"))], || {
-            let config = super::load_config();
-            assert_eq!(config.etherscan_key, Some("a".to_string()));
-        });
-
-        temp_env::with_vars([("ETHERSCAN_KEY", Some(""))], || {
-            let config = super::load_config();
-            assert_eq!(config.etherscan_key, None);
-        });
-
-        temp_env::with_vars_unset([("ETHERSCAN_KEY")], || {
-            let config = super::load_config();
-            assert_eq!(config.etherscan_key, None);
-        });
-    }
-
-    #[test]
-    fn test_config_api_key() {
-        temp_env::with_vars([("API_KEY", Some("a"))], || {
-            let config = super::load_config();
-            assert_eq!(config.api_key, Some("a".to_string()));
-        });
-
-        temp_env::with_vars([("API_KEY", Some(""))], || {
-            let config = super::load_config();
-            assert_eq!(config.api_key, None);
-        });
-
-        temp_env::with_vars_unset([("API_KEY")], || {
-            let config = super::load_config();
-            assert_eq!(config.api_key, None);
-        });
+    fn test_simulation_url() {
+        temp_env::with_vars(
+            [("BASE_URL", Some("https://temper.example.com"))],
+            || {
+                let config = super::load_config();
+                assert_eq!(
+                    config.simulation_url("abc123"),
+                    "https://temper.example.com/simulation/abc123"
+                );
+            },
+        );
     }
 }

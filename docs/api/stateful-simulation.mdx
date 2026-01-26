@@ -1,0 +1,186 @@
+---
+title: 'Stateful Simulation'
+description: 'Create persistent simulation environments for testing transaction sequences'
+---
+
+# Stateful Simulation
+
+Create a persistent simulation environment that maintains state across multiple API calls. Perfect for interactive testing, building complex scenarios step-by-step, and debugging transaction sequences.
+
+## Workflow
+
+1. **Create** a stateful simulation session
+2. **Execute** transactions (state persists between calls)
+3. **End** the session when done
+
+## Create Session
+
+<ParamField path="POST" method="/api/v1/simulate-stateful">
+  Creates a new stateful simulation session
+</ParamField>
+
+### Request
+
+```json
+{
+  "chainId": 1,
+  "gasLimit": "0x1000000",
+  "blockNumber": 19234567,
+  "blockTimestamp": "0x65d8f4a0"
+}
+```
+
+### Response
+
+```json
+{
+  "statefulSimulationId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## Execute Transaction
+
+<ParamField path="POST" method="/api/v1/simulate-stateful/{id}">
+  Execute transactions within the stateful session
+</ParamField>
+
+### Request
+
+Send an array of transactions to execute:
+
+```json
+[
+  {
+    "chainId": 1,
+    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "data": "0xa9059cbb...",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  }
+]
+```
+
+### Response
+
+Returns simulation results for each transaction:
+
+```json
+[
+  {
+    "id": "abc123",
+    "simulation_url": "https://temper.dev/simulation/abc123",
+    "success": true,
+    "gas_used": 51234,
+    ...
+  }
+]
+```
+
+## End Session
+
+<ParamField path="DELETE" method="/api/v1/simulate-stateful/{id}">
+  Ends the stateful simulation session and cleans up resources
+</ParamField>
+
+### Response
+
+```json
+{
+  "success": true
+}
+```
+
+## Complete Example
+
+<CodeGroup>
+```javascript JavaScript
+// 1. Create session
+const session = await fetch('https://api.temper.dev/api/v1/simulate-stateful', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chainId: 1,
+    gasLimit: '0x1000000'
+  })
+}).then(r => r.json());
+
+const sessionId = session.statefulSimulationId;
+
+// 2. Execute first transaction (approve)
+const approve = await fetch(`https://api.temper.dev/api/v1/simulate-stateful/${sessionId}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([{
+    chainId: 1,
+    from: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+    to: USDC_ADDRESS,
+    data: encodeApprove(ROUTER, MAX_UINT256),
+    gasLimit: '0x100000',
+    value: '0x0'
+  }])
+}).then(r => r.json());
+
+console.log('Approve succeeded:', approve[0].success);
+
+// 3. Execute second transaction (swap) - sees the approval from step 2
+const swap = await fetch(`https://api.temper.dev/api/v1/simulate-stateful/${sessionId}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([{
+    chainId: 1,
+    from: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+    to: ROUTER,
+    data: encodeSwap(...),
+    gasLimit: '0x200000',
+    value: '0x0'
+  }])
+}).then(r => r.json());
+
+console.log('Swap succeeded:', swap[0].success);
+
+// 4. End session
+await fetch(`https://api.temper.dev/api/v1/simulate-stateful/${sessionId}`, {
+  method: 'DELETE'
+});
+```
+
+```python Python
+import requests
+
+# Create session
+session = requests.post(
+    'https://api.temper.dev/api/v1/simulate-stateful',
+    json={'chainId': 1, 'gasLimit': '0x1000000'}
+).json()
+
+session_id = session['statefulSimulationId']
+
+# Execute transactions
+approve_result = requests.post(
+    f'https://api.temper.dev/api/v1/simulate-stateful/{session_id}',
+    json=[{
+        'chainId': 1,
+        'from': '0x...',
+        'to': USDC_ADDRESS,
+        'data': approve_calldata,
+        'gasLimit': '0x100000',
+        'value': '0x0'
+    }]
+).json()
+
+# End session
+requests.delete(f'https://api.temper.dev/api/v1/simulate-stateful/{session_id}')
+```
+</CodeGroup>
+
+## Use Cases
+
+### Interactive Testing
+Build up complex scenarios step by step, inspecting state after each transaction.
+
+### Strategy Development
+Test different transaction orderings and parameters without restarting from scratch.
+
+### Debugging
+Isolate issues by executing transactions one at a time and checking intermediate states.

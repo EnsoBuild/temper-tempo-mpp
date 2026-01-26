@@ -1,0 +1,159 @@
+---
+title: 'Debug Trace'
+api: 'POST /api/v1/debug'
+description: 'Get step-by-step execution trace for debugging'
+---
+
+# Debug Trace
+
+Fetch a detailed debug trace for an on-chain transaction. Returns the full call tree with input data for each call, enabling source-level debugging.
+
+## Request
+
+<ParamField body="txHash" type="string" required>
+  The transaction hash to debug (0x-prefixed)
+</ParamField>
+
+<ParamField body="chainId" type="number" required>
+  Chain ID where the transaction was executed
+</ParamField>
+
+```json
+{
+  "txHash": "0xe7fec44576a7b14a893e4fdf5dfef34bfaf378c5d86ed22173c42385d7872cec",
+  "chainId": 1
+}
+```
+
+## Response
+
+<ResponseField name="gas" type="number">
+  Total gas used by the transaction
+</ResponseField>
+
+<ResponseField name="failed" type="boolean">
+  Whether the transaction failed
+</ResponseField>
+
+<ResponseField name="txInput" type="string">
+  The original transaction input data
+</ResponseField>
+
+<ResponseField name="txTo" type="string">
+  The transaction target address
+</ResponseField>
+
+<ResponseField name="txFrom" type="string">
+  The transaction sender address
+</ResponseField>
+
+<ResponseField name="callTree" type="object">
+  Full call tree from callTracer with nested calls
+</ResponseField>
+
+<ResponseField name="structLogs" type="array">
+  Raw EVM execution steps (if available)
+</ResponseField>
+
+### Call Tree Structure
+
+```json
+{
+  "callTree": {
+    "type": "CALL",
+    "from": "0xe78fde8e0885181dc6bb430259f9e7f28655b884",
+    "to": "0xf75584ef6673ad213a685a1b58cc0330b8ea22cf",
+    "input": "0xb94c3609...",
+    "output": "0x...",
+    "gas": "0x100000",
+    "gasUsed": "0x4a2b3",
+    "calls": [
+      {
+        "type": "CALL",
+        "from": "0xf75584ef6673ad213a685a1b58cc0330b8ea22cf",
+        "to": "0x5555555555555555555555555555555555555555",
+        "input": "0x23b872dd...",
+        "calls": []
+      },
+      ...
+    ]
+  }
+}
+```
+
+## Example
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.temper.dev/api/v1/debug \
+  -H "Content-Type: application/json" \
+  -d '{
+    "txHash": "0xe7fec44576a7b14a893e4fdf5dfef34bfaf378c5d86ed22173c42385d7872cec",
+    "chainId": 1
+  }'
+```
+
+```javascript JavaScript
+const trace = await fetch('https://api.temper.dev/api/v1/debug', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    txHash: '0xe7fec44576a7b14a893e4fdf5dfef34bfaf378c5d86ed22173c42385d7872cec',
+    chainId: 1
+  })
+}).then(r => r.json());
+
+// Traverse call tree
+function printCalls(call, depth = 0) {
+  const indent = '  '.repeat(depth);
+  const selector = call.input?.slice(0, 10) || 'N/A';
+  console.log(`${indent}${call.type} ${call.to} (${selector})`);
+  for (const nested of call.calls || []) {
+    printCalls(nested, depth + 1);
+  }
+}
+
+printCalls(trace.callTree);
+```
+</CodeGroup>
+
+## Contract Source
+
+Fetch verified source code for a contract:
+
+<ParamField path="GET" method="/api/v1/contract/{chainId}/{address}/source">
+  Get verified source code from Sourcify or block explorer
+</ParamField>
+
+### Response
+
+```json
+{
+  "name": "UniswapV2Router",
+  "sources": {
+    "UniswapV2Router.sol": "// SPDX-License-Identifier...",
+    "IUniswapV2Router.sol": "..."
+  },
+  "sourceList": ["UniswapV2Router.sol", "IUniswapV2Router.sol"],
+  "abi": [...]
+}
+```
+
+## Web Debugger
+
+Access the interactive debugger at:
+
+```
+https://temper.dev/debug?tx={txHash}&chain={chainId}
+```
+
+Features:
+- Source code with syntax highlighting
+- Step through function calls with ← → keys
+- Decoded function parameters
+- Function index for quick navigation
+- Call details panel
+
+<Note>
+Debug tracing requires an archive node with `debug_traceTransaction` support. Not all RPC providers support this - use a dedicated archive node or service like Alchemy Growth tier.
+</Note>

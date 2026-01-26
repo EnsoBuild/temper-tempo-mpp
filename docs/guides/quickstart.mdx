@@ -1,0 +1,173 @@
+---
+title: 'Quick Start'
+description: 'Get started with Temper in 5 minutes'
+---
+
+# Quick Start Guide
+
+Learn how to simulate your first transaction with Temper.
+
+## Prerequisites
+
+- An RPC endpoint for the chain you want to simulate on
+- Basic understanding of EVM transactions
+
+## 1. Simulate a Simple Transfer
+
+Let's simulate a USDC transfer on Ethereum:
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.temper.dev/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chainId": 1,
+    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "data": "0xa9059cbb000000000000000000000000d8dA6BF26964aF9D7eEd9e03E53415D37aA960450000000000000000000000000000000000000000000000000000000005f5e100",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  }'
+```
+
+```javascript JavaScript
+const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+const vitalik = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
+
+// Encode transfer(address,uint256) with 100 USDC
+const data = '0xa9059cbb' +
+  vitalik.slice(2).padStart(64, '0') +
+  (100_000_000).toString(16).padStart(64, '0');
+
+const result = await fetch('https://api.temper.dev/api/v1/simulate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chainId: 1,
+    from: vitalik,
+    to: USDC,
+    data: data,
+    gasLimit: '0x100000',
+    value: '0x0'
+  })
+}).then(r => r.json());
+
+console.log('Success:', result.success);
+console.log('Gas used:', result.gas_used);
+console.log('View:', result.simulation_url);
+```
+
+```python Python
+import requests
+
+USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+sender = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+
+# transfer(address,uint256) selector + args
+data = '0xa9059cbb' + sender[2:].zfill(64) + hex(100_000_000)[2:].zfill(64)
+
+response = requests.post(
+    'https://api.temper.dev/api/v1/simulate',
+    json={
+        'chainId': 1,
+        'from': sender,
+        'to': USDC,
+        'data': data,
+        'gasLimit': '0x100000',
+        'value': '0x0'
+    }
+)
+
+result = response.json()
+print(f"Success: {result['success']}")
+print(f"View: {result['simulation_url']}")
+```
+</CodeGroup>
+
+## 2. Check the Result
+
+The response includes:
+
+```json
+{
+  "id": "mHmgzXD28j18r8pnMDota",
+  "simulation_url": "https://temper.dev/simulation/mHmgzXD28j18r8pnMDota",
+  "success": true,
+  "gas_used": 51234,
+  "logs": [
+    {
+      "topics": ["0xddf252ad..."],  // Transfer event
+      "data": "0x..."
+    }
+  ]
+}
+```
+
+## 3. View in Browser
+
+Click the `simulation_url` to see:
+
+- Full transaction overview
+- Call trace visualization
+- Decoded events
+- Token transfers
+
+## 4. Test with State Overrides
+
+Simulate with a custom balance:
+
+```javascript
+const result = await fetch('https://api.temper.dev/api/v1/simulate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chainId: 1,
+    from: '0x0000000000000000000000000000000000000001',
+    to: USDC,
+    data: transferCalldata,
+    gasLimit: '0x100000',
+    value: '0x0',
+    stateOverrides: {
+      // Give the sender 1000 USDC
+      [USDC]: {
+        stateDiff: {
+          // balanceOf[sender] storage slot
+          '0x...': '0x...'
+        }
+      }
+    }
+  })
+}).then(r => r.json());
+```
+
+## 5. Debug a Failed Transaction
+
+If a simulation fails, use the debugger:
+
+```javascript
+// First, simulate
+const result = await simulate(tx);
+
+if (!result.success) {
+  console.log('Transaction would revert!');
+  console.log('Revert reason:', result.enhanced_trace?.revert_reason);
+  console.log('Debug at:', result.simulation_url);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Bundle Simulation" href="/api/simulate-bundle">
+    Simulate multiple transactions in sequence
+  </Card>
+  <Card title="Stateful Simulation" href="/api/stateful-simulation">
+    Create persistent test environments
+  </Card>
+  <Card title="Debug Trace" href="/api/debug">
+    Step-by-step transaction debugging
+  </Card>
+  <Card title="API Reference" href="/api/simulate">
+    Complete API documentation
+  </Card>
+</CardGroup>

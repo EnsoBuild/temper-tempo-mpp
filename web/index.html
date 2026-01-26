@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temper - EVM Transaction Simulator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Temper</h1>
+            <p class="subtitle">EVM Transaction Simulator</p>
+        </header>
+
+        <main>
+            <section class="intro">
+                <h2>Simulate Ethereum Transactions</h2>
+                <p>Temper allows you to simulate EVM transactions and inspect their execution traces.</p>
+
+                <div class="api-info">
+                    <h3>API Endpoints</h3>
+                    <ul>
+                        <li><code>POST /api/v1/simulate</code> - Simulate a single transaction</li>
+                        <li><code>POST /api/v1/simulate-bundle</code> - Simulate multiple transactions</li>
+                        <li><code>GET /api/v1/simulation/{id}</code> - Get stored simulation</li>
+                        <li><code>GET /api/v1/simulation/{id}/trace</code> - Get trace for viewer</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="quick-test">
+                <h3>Quick Test</h3>
+                <p>Enter a simulation ID to view:</p>
+                <form id="view-form">
+                    <input type="text" id="sim-id" placeholder="Simulation ID" />
+                    <button type="submit">View</button>
+                </form>
+            </section>
+        </main>
+
+        <footer>
+            <p>Powered by <a href="https://github.com/EnsoFinance/temper">Temper</a></p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('view-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = document.getElementById('sim-id').value.trim();
+            if (id) {
+                window.location.href = '/simulation/' + id;
+            }
+        });
+    </script>
+</body>
+</html>

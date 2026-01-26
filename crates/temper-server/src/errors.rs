@@ -1,7 +1,8 @@
-use eyre::Report;
+//! Error handling for HTTP responses
+
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, error::Error};
-
+use temper_core::simulation::SimulationError;
 use warp::{body::BodyDeserializeError, hyper::StatusCode, reject::Reject, Rejection, Reply};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,17 +47,55 @@ pub struct OverrideError;
 impl Reject for OverrideError {}
 
 #[derive(Debug)]
-pub struct EvmError(pub Report);
+pub struct EvmError(pub eyre::Report);
 
 impl Reject for EvmError {}
+
+#[derive(Debug)]
+pub struct SimulationNotFound;
+
+impl Reject for SimulationNotFound {}
+
+#[derive(Debug)]
+pub struct DatabaseError(pub String);
+
+impl Reject for DatabaseError {}
+
+#[derive(Debug)]
+pub struct TraceFetchError(pub String);
+
+impl Reject for TraceFetchError {}
+
+/// Convert SimulationError to warp Rejection
+pub fn simulation_error_to_rejection(err: SimulationError) -> Rejection {
+    match err {
+        SimulationError::NoRpcUrlForChain(_) => warp::reject::custom(NoURLForChainIdError),
+        SimulationError::IncorrectChainId { .. } => {
+            warp::reject::custom(IncorrectChainIdError())
+        }
+        SimulationError::MultipleChainIds => warp::reject::custom(MultipleChainIdsError()),
+        SimulationError::InvalidBlockNumbers => {
+            warp::reject::custom(InvalidBlockNumbersError())
+        }
+        SimulationError::OverrideError => warp::reject::custom(OverrideError),
+        SimulationError::EvmError(e) => warp::reject::custom(EvmError(e)),
+        SimulationError::MissingToAddress => warp::reject::custom(IncorrectChainIdError()),
+        SimulationError::StateNotFound => warp::reject::custom(StateNotFound()),
+    }
+}
 
 pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     let code;
     let message: String;
-    println!("Handling rejection: {:?}", err);
+
+    log::debug!("Handling rejection: {:?}", err);
+
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
         message = "NOT_FOUND".to_string();
+    } else if let Some(_e) = err.find::<SimulationNotFound>() {
+        code = StatusCode::NOT_FOUND;
+        message = "SIMULATION_NOT_FOUND".to_string();
     } else if let Some(_e) = err.find::<StateNotFound>() {
         code = StatusCode::NOT_FOUND;
         message = "STATE_NOT_FOUND".to_string();
@@ -79,9 +118,7 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "OVERRIDE_ERROR".to_string();
     } else if let Some(_e) = err.find::<EvmError>() {
-        // Use {:#} to get full error chain including causes
         let full_error = format!("{:#}", _e.0);
-        // Check for gas-related errors (handles both old and new foundry error formats)
         if full_error.contains("CallGasCostMoreThanGasLimit")
             || full_error.contains("call gas cost")
             || full_error.contains("exceeds the gas limit")
@@ -92,26 +129,26 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
             code = StatusCode::INTERNAL_SERVER_ERROR;
             message = "EVM_ERROR".to_string();
         }
+    } else if let Some(_e) = err.find::<DatabaseError>() {
+        code = StatusCode::INTERNAL_SERVER_ERROR;
+        message = "DATABASE_ERROR".to_string();
+    } else if let Some(e) = err.find::<TraceFetchError>() {
+        code = StatusCode::BAD_REQUEST;
+        message = format!("TRACE_FETCH_ERROR: {}", e.0);
     } else if let Some(e) = err.find::<BodyDeserializeError>() {
-        // This error happens if the body could not be deserialized correctly
-        // We can use the cause to analyze the error and customize the error message
-        dbg!(e);
         message = match e.source() {
             Some(cause) => format!("BAD REQUEST: {cause}"),
             None => "BAD_REQUEST".to_string(),
         };
         code = StatusCode::BAD_REQUEST;
     } else if err.find::<warp::reject::MethodNotAllowed>().is_some() {
-        // We can handle a specific error, here METHOD_NOT_ALLOWED,
-        // and render it however we want
         code = StatusCode::METHOD_NOT_ALLOWED;
         message = "METHOD_NOT_ALLOWED".to_string();
     } else if err.find::<warp::reject::MissingHeader>().is_some() {
         code = StatusCode::UNAUTHORIZED;
         message = "UNAUTHORIZED".to_string();
     } else {
-        // We should have expected this... Just log and say its a 500
-        eprintln!("unhandled rejection: {err:?}");
+        log::error!("unhandled rejection: {err:?}");
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "UNHANDLED_REJECTION".to_string();
     }

@@ -1,0 +1,96 @@
+---
+title: 'Simulation Viewer'
+description: 'Retrieve simulation results and view in the web debugger'
+---
+
+# Simulation Viewer
+
+Every simulation is stored and accessible via a unique ID. You can retrieve the results programmatically or view them in the interactive web debugger.
+
+## Get Simulation
+
+<ParamField path="GET" method="/api/v1/simulation/{id}">
+  Retrieve full simulation results by ID
+</ParamField>
+
+### Response
+
+Returns the complete simulation response including traces, logs, and metadata.
+
+```json
+{
+  "id": "mHmgzXD28j18r8pnMDota",
+  "chain_id": 1,
+  "tx_hash": "0x...",
+  "success": true,
+  "gas_used": 51234,
+  "block_number": 19234567,
+  "enhanced_trace": {...},
+  "logs": [...]
+}
+```
+
+## Get Trace
+
+<ParamField path="GET" method="/api/v1/simulation/{id}/trace">
+  Get only the call trace for a simulation
+</ParamField>
+
+Returns the enhanced trace tree structure for visualization.
+
+## Web Viewer
+
+Access the simulation viewer at:
+
+```
+https://temper.dev/simulation/{id}
+```
+
+The viewer shows:
+
+- **Transaction Overview** - From, to, value, gas
+- **Call Trace** - Hierarchical view of all internal calls
+- **Event Logs** - Decoded events with parameter names
+- **Token Transfers** - Detected ERC20/721/1155 transfers
+- **State Changes** - Storage modifications
+- **Gas Breakdown** - Per-call gas usage
+
+## Debugger
+
+For step-by-step debugging, access:
+
+```
+https://temper.dev/debug?tx={txHash}&chain={chainId}
+```
+
+Or for a simulation:
+
+```
+https://temper.dev/simulation/{id}  → Click "Debug" button
+```
+
+The debugger provides:
+
+- **Source Code View** - Solidity source with syntax highlighting
+- **Function Navigation** - Step through function calls
+- **Decoded Parameters** - See input values for each call
+- **Function Index** - Jump to any function in the contract
+
+## Example: Share a Simulation
+
+```javascript
+// Simulate
+const result = await fetch('https://api.temper.dev/api/v1/simulate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(transaction)
+}).then(r => r.json());
+
+// Share the URL
+console.log(`View simulation: ${result.simulation_url}`);
+// Output: View simulation: https://temper.dev/simulation/mHmgzXD28j18r8pnMDota
+
+// Or retrieve later
+const saved = await fetch(`https://api.temper.dev/api/v1/simulation/${result.id}`)
+  .then(r => r.json());
+```

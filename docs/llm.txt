@@ -1,0 +1,164 @@
+# Temper API - AI Agent Guide
+
+Temper is an EVM transaction simulation API. Use it to preview transaction outcomes before sending them on-chain.
+
+## Base URL
+https://api.temper.dev/api/v1
+
+## Authentication
+No authentication required for public endpoints.
+
+## Quick Reference
+
+### Simulate a Transaction
+POST /simulate
+
+```json
+{
+  "chainId": 1,
+  "from": "0x...",
+  "to": "0x...",
+  "data": "0x...",
+  "gasLimit": "0x100000",
+  "value": "0x0"
+}
+```
+
+Response includes `success`, `gas_used`, `logs`, `simulation_url`, and `enhanced_trace`.
+
+### Simulate Multiple Transactions (Bundle)
+POST /simulate-bundle
+
+Send array of transaction objects. State persists between transactions.
+
+### Stateful Simulation
+1. POST /simulate-stateful - Create session, returns `statefulSimulationId`
+2. POST /simulate-stateful/{id} - Execute transactions
+3. DELETE /simulate-stateful/{id} - End session
+
+### Debug On-Chain Transaction
+POST /debug
+
+```json
+{
+  "txHash": "0x...",
+  "chainId": 1
+}
+```
+
+Returns call tree with input data for each call.
+
+### Get Simulation Results
+GET /simulation/{id}
+
+### Get Contract Source
+GET /contract/{chainId}/{address}/source
+
+## Common Patterns
+
+### Check if transaction will succeed
+```
+POST /simulate with transaction data
+Check response.success === true
+If false, check response.enhanced_trace.revert_reason
+```
+
+### Estimate gas
+```
+POST /simulate with high gasLimit
+Read response.gas_used for actual gas needed
+```
+
+### Test with custom balance
+```
+POST /simulate with stateOverrides:
+{
+  "stateOverrides": {
+    "0xaddress": {
+      "balance": "0xde0b6b3a7640000"
+    }
+  }
+}
+```
+
+### Simulate approve + swap
+```
+POST /simulate-bundle with array:
+[
+  { approve transaction },
+  { swap transaction }
+]
+```
+
+## Supported Chains
+- Ethereum (1)
+- Polygon (137)
+- Arbitrum (42161)
+- Optimism (10)
+- Base (8453)
+- BSC (56)
+- HyperEVM (999)
+
+## Response Format
+
+All endpoints return JSON. Key fields:
+
+- `id`: Simulation ID
+- `simulation_url`: Link to web viewer
+- `success`: Boolean
+- `gas_used`: Number
+- `logs`: Array of event logs
+- `enhanced_trace`: Call tree with nested calls
+- `return_data`: Hex string of return data
+- `exit_reason`: "Return", "Revert", "OutOfGas", etc.
+
+## Error Handling
+
+Failed simulations return success=false with:
+- `exit_reason`: Why it failed
+- `enhanced_trace.error`: Error type
+- `enhanced_trace.revert_reason`: Decoded revert message if available
+
+## Web Interface
+
+- View simulation: https://temper.dev/simulation/{id}
+- Debug transaction: https://temper.dev/debug?tx={hash}&chain={chainId}
+
+## Example: Complete Flow
+
+```javascript
+// 1. Simulate
+const result = await fetch('https://api.temper.dev/api/v1/simulate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chainId: 1,
+    from: sender,
+    to: contract,
+    data: calldata,
+    gasLimit: '0x100000',
+    value: '0x0'
+  })
+}).then(r => r.json());
+
+// 2. Check result
+if (result.success) {
+  console.log('Gas needed:', result.gas_used);
+  console.log('View:', result.simulation_url);
+} else {
+  console.log('Would revert:', result.enhanced_trace?.revert_reason);
+}
+
+// 3. Retrieve later
+const saved = await fetch(`https://api.temper.dev/api/v1/simulation/${result.id}`)
+  .then(r => r.json());
+```
+
+## Tips for AI Agents
+
+1. Always check `success` field before assuming transaction works
+2. Use `simulation_url` to give users a link to view details
+3. For debugging reverts, check `enhanced_trace.revert_reason`
+4. Use bundle simulation for multi-step operations (approve+swap)
+5. Use state overrides to test with custom balances/storage
+6. Gas estimates from simulation are accurate for the simulated state

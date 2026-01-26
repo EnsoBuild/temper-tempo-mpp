@@ -1,0 +1,136 @@
+---
+title: 'Simulate Bundle'
+api: 'POST /api/v1/simulate-bundle'
+description: 'Simulate multiple transactions in sequence with shared state'
+---
+
+# Simulate Bundle
+
+Simulate an ordered bundle of transactions where each transaction sees the state changes from previous ones. Perfect for MEV strategies, complex DeFi operations, and testing transaction sequences.
+
+## Request
+
+The request body is an array of simulation requests. Each transaction is executed in order, with state persisting between them.
+
+```json
+[
+  {
+    "chainId": 1,
+    "from": "0x...",
+    "to": "0x...",
+    "data": "0x...",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  },
+  {
+    "chainId": 1,
+    "from": "0x...",
+    "to": "0x...",
+    "data": "0x...",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  }
+]
+```
+
+<Note>
+All transactions in a bundle must have the same `chainId`. State overrides from the first transaction apply to all subsequent ones.
+</Note>
+
+## Response
+
+Returns an array of simulation responses, one for each transaction in the bundle.
+
+```json
+[
+  {
+    "id": "sim1abc",
+    "simulation_url": "https://temper.dev/simulation/sim1abc",
+    "success": true,
+    "gas_used": 45000,
+    ...
+  },
+  {
+    "id": "sim2def",
+    "simulation_url": "https://temper.dev/simulation/sim2def",
+    "success": true,
+    "gas_used": 52000,
+    ...
+  }
+]
+```
+
+## Example: Approve + Swap
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.temper.dev/api/v1/simulate-bundle \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "chainId": 1,
+      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "data": "0x095ea7b3000000000000000000000000def1c0ded9bec7f1a1670819833240f027b25eff0000000000000000000000000000000000000000000000000000000005f5e100",
+      "gasLimit": "0x100000",
+      "value": "0x0"
+    },
+    {
+      "chainId": 1,
+      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "to": "0xdef1c0ded9bec7f1a1670819833240f027b25eff",
+      "data": "0x...",
+      "gasLimit": "0x200000",
+      "value": "0x0"
+    }
+  ]'
+```
+
+```javascript JavaScript
+const bundle = [
+  {
+    chainId: 1,
+    from: wallet.address,
+    to: USDC_ADDRESS,
+    data: encodeApprove(ROUTER_ADDRESS, amount),
+    gasLimit: '0x100000',
+    value: '0x0'
+  },
+  {
+    chainId: 1,
+    from: wallet.address,
+    to: ROUTER_ADDRESS,
+    data: encodeSwap(USDC_ADDRESS, WETH_ADDRESS, amount),
+    gasLimit: '0x200000',
+    value: '0x0'
+  }
+];
+
+const response = await fetch('https://api.temper.dev/api/v1/simulate-bundle', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(bundle)
+});
+
+const results = await response.json();
+const totalGas = results.reduce((sum, r) => sum + r.gas_used, 0);
+console.log(`Bundle would use ${totalGas} gas`);
+```
+</CodeGroup>
+
+## Use Cases
+
+### MEV Bundle Testing
+Simulate flashbots bundles before submission:
+- Verify profitability
+- Check for reverts
+- Estimate total gas
+
+### DeFi Strategy Testing
+Test complex multi-step strategies:
+- Flash loan → Swap → Repay
+- Approve → Deposit → Stake
+- Borrow → Swap → Supply
+
+### Transaction Sequencing
+Ensure transactions execute in correct order with proper state dependencies.

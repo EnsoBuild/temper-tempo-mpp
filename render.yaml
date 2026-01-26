@@ -1,0 +1,44 @@
+services:
+  # API + Simulation Viewer UI (same server)
+  - type: web
+    name: temper-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    plan: starter  # or 'free' for testing
+    envVars:
+      - key: RUST_LOG
+        value: info
+      - key: DATABASE_PATH
+        value: /data/temper.db
+      - key: BASE_URL
+        value: https://temper-api.onrender.com
+      # Add your RPC URLs as secrets in Render dashboard
+      - key: ETHEREUM_RPC_URL
+        sync: false
+      - key: POLYGON_RPC_URL
+        sync: false
+      - key: ARBITRUM_RPC_URL
+        sync: false
+      - key: BASE_RPC_URL
+        sync: false
+      - key: OPTIMISM_RPC_URL
+        sync: false
+    disk:
+      name: temper-data
+      mountPath: /data
+      sizeGB: 1
+
+  # Documentation site (static) - OPTIONAL
+  # Alternative: Use Mintlify hosting (free) at mintlify.com
+  # Just connect your GitHub repo and it auto-deploys
+  - type: web
+    name: temper-docs
+    env: static
+    buildCommand: cd docs && npx mintlify build
+    staticPublishPath: docs/.mintlify/output
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
