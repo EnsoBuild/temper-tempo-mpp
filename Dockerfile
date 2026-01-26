@@ -1,5 +1,5 @@
-# Build stage
-FROM rust:1.85-slim-bookworm as builder
+# Build stage - using nightly for latest dependency support
+FROM rustlang/rust:nightly-slim-bookworm as builder
 
 WORKDIR /app
 
