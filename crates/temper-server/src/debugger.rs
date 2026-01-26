@@ -145,34 +145,20 @@ pub struct DebugCallParams {
     pub data: Option<String>,
 }
 
-/// Fetch debug trace for an existing transaction using structLogger
+/// Fetch debug trace for an existing transaction
+/// Tries callTracer first (widely supported), falls back to structLogger if needed
 pub async fn fetch_debug_trace(
     rpc_url: &str,
     tx_hash: &str,
 ) -> Result<DebugTrace, String> {
     let client = http_client();
 
-    // Prepare all three requests
-    let struct_logger_request = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "debug_traceTransaction",
-        "params": [tx_hash, {
-            "enableMemory": false,
-            "enableStack": true,
-            "enableStorage": true,
-            "disableStack": false,
-            "disableStorage": false,
-            "disableMemory": true,
-            "limit": 100000
-        }],
-        "id": 1
-    });
-
+    // Prepare requests
     let tx_request = serde_json::json!({
         "jsonrpc": "2.0",
         "method": "eth_getTransactionByHash",
         "params": [tx_hash],
-        "id": 2
+        "id": 1
     });
 
     let call_tracer_request = serde_json::json!({
@@ -181,60 +167,68 @@ pub async fn fetch_debug_trace(
         "params": [tx_hash, {
             "tracer": "callTracer",
             "tracerConfig": {
-                "withLog": false
+                "withLog": true
             }
         }],
-        "id": 3
+        "id": 2
     });
 
-    // Execute all three requests in parallel
-    let (struct_logger_result, tx_result, call_tracer_result) = tokio::join!(
-        client.post(rpc_url).json(&struct_logger_request).send(),
+    // Execute tx info and callTracer in parallel (callTracer is more widely supported)
+    let (tx_result, call_tracer_result) = tokio::join!(
         client.post(rpc_url).json(&tx_request).send(),
         client.post(rpc_url).json(&call_tracer_request).send()
     );
 
-    // Parse struct logger response (required)
-    let response = struct_logger_result.map_err(|e| format!("RPC request failed: {}", e))?;
-    let json: serde_json::Value = response
+    // Parse call tracer response (primary source)
+    let call_response = call_tracer_result.map_err(|e| format!("RPC request failed: {}", e))?;
+    let call_json: serde_json::Value = call_response
         .json()
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    if let Some(error) = json.get("error") {
+    if let Some(error) = call_json.get("error") {
         return Err(format!("RPC error: {}", error));
     }
 
-    let result = json.get("result").ok_or("No result in response")?;
-    let mut trace: DebugTrace = serde_json::from_value(result.clone())
-        .map_err(|e| format!("Failed to parse trace: {}", e))?;
+    let call_result = call_json.get("result").ok_or("No result in response")?;
+    let call_tree: CallFrame = serde_json::from_value(call_result.clone())
+        .map_err(|e| format!("Failed to parse call trace: {}", e))?;
 
-    // Parse transaction details (optional, for input data)
+    // Build trace from call tree
+    let mut trace = DebugTrace {
+        gas: call_tree.gas.as_ref()
+            .and_then(|g| u64::from_str_radix(g.trim_start_matches("0x"), 16).ok())
+            .unwrap_or(0),
+        failed: call_tree.error.is_some(),
+        return_value: call_tree.output.clone().unwrap_or_default(),
+        struct_logs: vec![], // Not available with callTracer
+        tx_input: call_tree.input.clone(),
+        tx_to: call_tree.to.clone(),
+        tx_from: Some(call_tree.from.clone()),
+        call_tree: Some(call_tree),
+    };
+
+    // Parse transaction details for additional info
     if let Ok(tx_response) = tx_result {
         if let Ok(tx_json) = tx_response.json::<serde_json::Value>().await {
             if let Some(tx_result) = tx_json.get("result") {
-                trace.tx_input = tx_result
-                    .get("input")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                trace.tx_to = tx_result
-                    .get("to")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                trace.tx_from = tx_result
-                    .get("from")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-            }
-        }
-    }
-
-    // Parse call tracer response (optional, for nested call data)
-    if let Ok(call_response) = call_tracer_result {
-        if let Ok(call_json) = call_response.json::<serde_json::Value>().await {
-            if let Some(call_result) = call_json.get("result") {
-                if let Ok(call_tree) = serde_json::from_value::<CallFrame>(call_result.clone()) {
-                    trace.call_tree = Some(call_tree);
+                if trace.tx_input.is_none() {
+                    trace.tx_input = tx_result
+                        .get("input")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                }
+                if trace.tx_to.is_none() {
+                    trace.tx_to = tx_result
+                        .get("to")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                }
+                if trace.tx_from.is_none() {
+                    trace.tx_from = tx_result
+                        .get("from")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
                 }
             }
         }
