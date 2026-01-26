@@ -14,15 +14,18 @@ services:
       - key: BASE_URL
         value: https://temper-api.onrender.com
       # Add your RPC URLs as secrets in Render dashboard
-      - key: ETHEREUM_RPC_URL
+      # Format: RPC_URL_{CHAIN_NAME}
+      - key: RPC_URL_ETHEREUM
         sync: false
-      - key: POLYGON_RPC_URL
+      - key: RPC_URL_POLYGON
         sync: false
-      - key: ARBITRUM_RPC_URL
+      - key: RPC_URL_ARBITRUM
         sync: false
-      - key: BASE_RPC_URL
+      - key: RPC_URL_BASE
         sync: false
-      - key: OPTIMISM_RPC_URL
+      - key: RPC_URL_OPTIMISM
+        sync: false
+      - key: RPC_URL_HYPER
         sync: false
     disk:
       name: temper-data
