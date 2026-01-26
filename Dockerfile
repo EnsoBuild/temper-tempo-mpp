@@ -15,7 +15,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY web ./web
 
-# Build release binary
+# Build release binary (requires 1GB+ RAM at runtime due to foundry-evm)
 RUN cargo build --release -p temper-server --features "ethereum"
 
 # Runtime stage
