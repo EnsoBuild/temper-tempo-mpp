@@ -315,12 +315,24 @@ header h1 {
 
 /* Revert Banner */
 .revert-banner {
-    margin: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
     padding: 1rem 1.25rem;
-    background: rgba(248, 113, 113, 0.08);
+    background: linear-gradient(135deg, rgba(248, 113, 113, 0.08), rgba(248, 113, 113, 0.04));
     border: 1px solid rgba(248, 113, 113, 0.3);
-    border-radius: 10px;
+    border-radius: 12px;
     border-left: 4px solid var(--accent-red);
+}
+
+.revert-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.revert-content {
+    flex: 1;
 }
 
 .revert-title {
@@ -337,6 +349,7 @@ header h1 {
     font-weight: 500;
     color: var(--text-primary);
     font-family: 'IBM Plex Mono', monospace;
+    word-break: break-word;
 }
 
 .revert-location {
@@ -348,6 +361,27 @@ header h1 {
 .revert-contract {
     color: var(--accent-cyan);
     cursor: default;
+}
+
+.revert-debug-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--accent-red);
+    color: var(--bg-primary);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.revert-debug-btn:hover {
+    background: #ef4444;
+    box-shadow: 0 0 12px rgba(248, 113, 113, 0.4);
+    transform: translateY(-1px);
 }
 
 /* Call Nodes */

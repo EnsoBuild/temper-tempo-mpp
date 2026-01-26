@@ -56,6 +56,73 @@
         return NATIVE_TOKENS[currentChainId] || 'ETH';
     }
 
+    // Extract revert reason from trace (recursively searches call tree)
+    function extractRevertReason(trace) {
+        if (!trace) return null;
+
+        // Check current call for error
+        if (trace.error || trace.revertReason) {
+            const reason = trace.revertReason || trace.error;
+            // Try to decode if it's hex data
+            if (reason && reason.startsWith('0x')) {
+                return decodeRevertReason(reason);
+            }
+            return reason;
+        }
+
+        // Search subcalls recursively
+        const subcalls = trace.calls || trace.subtraces || [];
+        for (const subcall of subcalls) {
+            const reason = extractRevertReason(subcall);
+            if (reason) return reason;
+        }
+
+        return null;
+    }
+
+    // Decode hex revert reason (Error(string) or custom error)
+    function decodeRevertReason(hexData) {
+        if (!hexData || hexData.length < 10) return hexData;
+
+        // Error(string) selector: 0x08c379a0
+        if (hexData.startsWith('0x08c379a0') && hexData.length > 138) {
+            try {
+                // Skip selector (4 bytes) + offset (32 bytes) + length position
+                const lengthHex = hexData.slice(74, 138);
+                const length = parseInt(lengthHex, 16);
+                const stringHex = hexData.slice(138, 138 + length * 2);
+                const bytes = [];
+                for (let i = 0; i < stringHex.length; i += 2) {
+                    bytes.push(parseInt(stringHex.substr(i, 2), 16));
+                }
+                return new TextDecoder().decode(new Uint8Array(bytes));
+            } catch (e) {
+                return hexData;
+            }
+        }
+
+        // Panic(uint256) selector: 0x4e487b71
+        if (hexData.startsWith('0x4e487b71') && hexData.length >= 74) {
+            const panicCode = parseInt(hexData.slice(10, 74), 16);
+            const panicMessages = {
+                0x00: 'Generic panic',
+                0x01: 'Assertion failed',
+                0x11: 'Arithmetic overflow/underflow',
+                0x12: 'Division by zero',
+                0x21: 'Invalid enum value',
+                0x22: 'Storage byte array corrupted',
+                0x31: 'Pop on empty array',
+                0x32: 'Array index out of bounds',
+                0x41: 'Allocation too much memory',
+                0x51: 'Zero internal function call',
+            };
+            return panicMessages[panicCode] || `Panic(0x${panicCode.toString(16)})`;
+        }
+
+        // Return shortened hex if we can't decode
+        return hexData.length > 20 ? hexData.slice(0, 20) + '...' : hexData;
+    }
+
     // Block explorer API URLs by chain ID
     const EXPLORER_APIS = {
         1: 'https://api.etherscan.io/api',
@@ -985,8 +1052,26 @@
             `;
             app.appendChild(header);
 
-            // Transaction Overview panel
+            // Get trace for display
             const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
+
+            // Revert banner (if transaction reverted) - show prominently at top
+            if (!simulation.success) {
+                const revertReason = extractRevertReason(trace);
+                const revertBanner = document.createElement('div');
+                revertBanner.className = 'revert-banner';
+                revertBanner.innerHTML = `
+                    <div class="revert-icon">⚠️</div>
+                    <div class="revert-content">
+                        <div class="revert-title">Transaction Reverted</div>
+                        <div class="revert-reason">${revertReason || 'No revert reason provided'}</div>
+                    </div>
+                    ${simulation.txHash ? `<button class="revert-debug-btn" id="jumpToRevertBtn">Debug Revert →</button>` : ''}
+                `;
+                app.appendChild(revertBanner);
+            }
+
+            // Transaction Overview panel
             if (trace) {
                 const overview = document.createElement('div');
                 overview.className = 'tx-overview';
@@ -1177,6 +1262,14 @@
             if (openDebuggerBtn && simulation.txHash) {
                 openDebuggerBtn.addEventListener('click', () => {
                     window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}`;
+                });
+            }
+
+            // Jump to revert button (in revert banner)
+            const jumpToRevertBtn = document.getElementById('jumpToRevertBtn');
+            if (jumpToRevertBtn && simulation.txHash) {
+                jumpToRevertBtn.addEventListener('click', () => {
+                    window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}&jump=revert`;
                 });
             }
 

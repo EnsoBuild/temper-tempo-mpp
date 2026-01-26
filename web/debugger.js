@@ -820,6 +820,44 @@
         goToStep(callTrace.length - 1);
     }
 
+    // Find the first call that reverted (for jump to revert feature)
+    function findRevertIndex() {
+        if (!callTrace || callTrace.length === 0) return -1;
+
+        // Find the deepest failed call (the actual cause of revert)
+        let deepestFailedIndex = -1;
+        let deepestFailedDepth = -1;
+
+        for (let i = 0; i < callTrace.length; i++) {
+            const call = callTrace[i];
+            if (!call.success) {
+                // Prefer deeper calls as they're usually the root cause
+                if (call.depth > deepestFailedDepth) {
+                    deepestFailedDepth = call.depth;
+                    deepestFailedIndex = i;
+                }
+            }
+        }
+
+        return deepestFailedIndex;
+    }
+
+    function jumpToRevert() {
+        const revertIndex = findRevertIndex();
+        if (revertIndex >= 0) {
+            goToStep(revertIndex);
+
+            // Flash the step to draw attention
+            setTimeout(() => {
+                const activeStep = document.querySelector('.call-step.active');
+                if (activeStep) {
+                    activeStep.classList.add('flash');
+                    setTimeout(() => activeStep.classList.remove('flash'), 500);
+                }
+            }, 100);
+        }
+    }
+
     async function loadDebugTrace(txHash, chainId) {
         const app = document.getElementById('app');
         app.className = 'debugger-container';
@@ -943,9 +981,13 @@
         // Render call steps
         const callStepsHtml = await Promise.all(callTrace.map((call, i) => renderCallStep(call, i)));
 
-        // Get simulation ID from URL if available
+        // Get simulation ID and jump parameter from URL if available
         const urlParams = new URLSearchParams(window.location.search);
         const simId = urlParams.get('sim');
+        const shouldJumpToRevert = urlParams.get('jump') === 'revert';
+
+        // Check if transaction reverted
+        const hasRevert = debugTrace.failed || callTrace.some(c => !c.success);
 
         app.innerHTML = `
             <header class="debugger-header">
@@ -958,6 +1000,7 @@
                     <span class="tx-hash">${formatHex(txHash, 24)}</span>
                     <span class="chain-badge">Chain ${chainId}</span>
                     <span class="step-count">${callTrace.length} calls</span>
+                    ${hasRevert ? '<button class="jump-revert-btn" id="jumpToRevertBtn" title="Jump to the failing call">Jump to Revert</button>' : ''}
                 </div>
             </header>
 
@@ -1032,6 +1075,12 @@
             }
         });
 
+        // Jump to revert button
+        const jumpRevertBtn = document.getElementById('jumpToRevertBtn');
+        if (jumpRevertBtn) {
+            jumpRevertBtn.addEventListener('click', jumpToRevert);
+        }
+
         // Click on call to jump
         document.getElementById('stepList').addEventListener('click', (e) => {
             const stepEl = e.target.closest('.call-step');
@@ -1051,6 +1100,11 @@
 
         // Initial display
         updateDisplay();
+
+        // Auto-jump to revert if URL parameter is set
+        if (shouldJumpToRevert && hasRevert) {
+            setTimeout(() => jumpToRevert(), 300);
+        }
     }
 
     // Export
