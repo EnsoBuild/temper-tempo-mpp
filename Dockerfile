@@ -1,7 +1,16 @@
-# Build stage - rust:slim-bookworm has Rust 1.93+
-FROM rust:slim-bookworm AS builder
-
+# Stage 1: Generate recipe for dependency caching
+FROM rust:slim-bookworm AS chef
+RUN cargo install cargo-chef
 WORKDIR /app
+
+# Stage 2: Prepare recipe (just dependency info)
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Stage 3: Build dependencies (cached if Cargo.toml/lock unchanged)
+FROM chef AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -10,45 +19,40 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy source
+# Build dependencies first (cached layer)
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p temper-server --features "ethereum"
+
+# Now copy source and build (only this runs on code changes)
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY web ./web
-
-# Build release binary (requires 1GB+ RAM at runtime due to foundry-evm)
 RUN cargo build --release -p temper-server --features "ethereum"
 
-# Runtime stage
+# Stage 4: Runtime
 FROM debian:bookworm-slim
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
 RUN useradd -m -u 1000 temper
 
-# Copy binary and web assets
 COPY --from=builder /app/target/release/temper-server /usr/local/bin/
 COPY web /app/web
 
 WORKDIR /app
-
-# Create data directory
 RUN mkdir -p /data && chown temper:temper /data
 
 USER temper
 
-# Environment
 ENV RUST_LOG=info
 ENV DATABASE_PATH=/data/temper.db
 ENV PORT=8089
 
 EXPOSE 8089
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8089/ || exit 1
 
