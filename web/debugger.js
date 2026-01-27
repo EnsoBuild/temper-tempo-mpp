@@ -1001,6 +1001,7 @@
                     <span class="chain-badge">Chain ${chainId}</span>
                     <span class="step-count">${callTrace.length} calls</span>
                     ${hasRevert ? '<button class="jump-revert-btn" id="jumpToRevertBtn" title="Jump to the failing call">Jump to Revert</button>' : ''}
+                    <button class="exit-btn" id="exitDebuggerBtn" title="Exit debugger">✕ Exit</button>
                 </div>
             </header>
 
@@ -1080,6 +1081,38 @@
         if (jumpRevertBtn) {
             jumpRevertBtn.addEventListener('click', jumpToRevert);
         }
+
+        // Exit debugger button - go back to transaction view
+        document.getElementById('exitDebuggerBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('exitDebuggerBtn');
+            btn.disabled = true;
+            btn.textContent = 'Loading...';
+
+            try {
+                // Fetch/store the transaction to get a simulation ID
+                const response = await fetch('/api/v1/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chain_id: chainId,
+                        tx_hash: txHash
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.id) {
+                        window.location.href = '/simulation/' + result.id;
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to store simulation:', e);
+            }
+
+            // Fallback to homepage if storing fails
+            window.location.href = '/';
+        });
 
         // Click on call to jump
         document.getElementById('stepList').addEventListener('click', (e) => {

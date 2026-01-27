@@ -187,10 +187,11 @@
     </div>
 
     <script>
-        document.getElementById('view-form').addEventListener('submit', function(e) {
+        document.getElementById('view-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const input = document.getElementById('sim-id').value.trim();
             const chainId = document.getElementById('chain-select').value;
+            const button = this.querySelector('button');
 
             if (!input) return;
 
@@ -198,8 +199,37 @@
             const isTxHash = /^0x[a-fA-F0-9]{64}$/.test(input);
 
             if (isTxHash) {
-                // Redirect to debugger with tx hash
-                window.location.href = '/debug?tx=' + input + '&chain=' + chainId;
+                // For tx hashes, call simulate API to fetch and store the trace
+                button.disabled = true;
+                button.textContent = 'Loading...';
+
+                try {
+                    const response = await fetch('/api/v1/simulate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chain_id: parseInt(chainId),
+                            tx_hash: input
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch transaction');
+                    }
+
+                    const result = await response.json();
+                    // Redirect to simulation view (which has the debugger button)
+                    if (result.id) {
+                        window.location.href = '/simulation/' + result.id;
+                    } else {
+                        // Fallback to debugger if no ID returned
+                        window.location.href = '/debug?tx=' + input + '&chain=' + chainId;
+                    }
+                } catch (err) {
+                    alert('Error: ' + err.message);
+                    button.disabled = false;
+                    button.textContent = 'Inspect';
+                }
             } else {
                 // Assume it's a simulation ID
                 window.location.href = '/simulation/' + input;

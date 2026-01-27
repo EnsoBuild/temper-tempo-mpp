@@ -228,88 +228,95 @@
             return contractCache.get(cacheKey);
         }
 
-        // Try Sourcify first (with short timeout)
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 1500);
+        // Race Sourcify and Etherscan in parallel - use first successful result
+        const promises = [fetchFromSourcify(address, chainId)];
 
-            const response = await fetch(
-                `https://sourcify.dev/server/files/any/${chainId}/${address}`,
-                { signal: controller.signal }
-            );
-            clearTimeout(timeout);
-
-            if (response.ok) {
-                const data = await response.json();
-                let contractName = null;
-                let abi = null;
-
-                if (data.files) {
-                    const metadataFile = data.files.find(f => f.name === 'metadata.json');
-                    if (metadataFile && metadataFile.content) {
-                        const metadata = JSON.parse(metadataFile.content);
-                        const compilationTarget = metadata.settings?.compilationTarget;
-                        if (compilationTarget) {
-                            contractName = Object.values(compilationTarget)[0];
-                        }
-                        if (metadata.output?.abi) {
-                            abi = metadata.output.abi;
-                        }
-                    }
-                }
-
-                if (contractName || abi) {
-                    const info = { name: contractName, abi };
-                    contractCache.set(cacheKey, info);
-                    cacheAbiSelectors(abi);
-                    return info;
-                }
-            }
-        } catch {
-            // Sourcify failed, try block explorer
-        }
-
-        // Try block explorer API (Etherscan/Blockscout)
         const explorerApi = EXPLORER_APIS[chainId];
         if (explorerApi) {
-            try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 2000);
+            promises.push(fetchFromEtherscan(address, chainId, explorerApi));
+        }
 
-                const response = await fetch(
-                    `${explorerApi}?module=contract&action=getsourcecode&address=${address}`,
-                    { signal: controller.signal }
-                );
-                clearTimeout(timeout);
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.status === '1' && data.result && data.result.length > 0) {
-                        const result = data.result[0];
-                        const contractName = result.ContractName || null;
-                        let abi = null;
-
-                        if (result.ABI && result.ABI !== 'Contract source code not verified') {
-                            try {
-                                abi = JSON.parse(result.ABI);
-                            } catch {}
-                        }
-
-                        if (contractName || abi) {
-                            const info = { name: contractName, abi };
-                            contractCache.set(cacheKey, info);
-                            cacheAbiSelectors(abi);
-                            return info;
-                        }
-                    }
-                }
-            } catch {
-                // Block explorer failed
+        try {
+            // Promise.any returns first successful result
+            const result = await Promise.any(promises);
+            if (result) {
+                contractCache.set(cacheKey, result);
+                cacheAbiSelectors(result.abi);
+                return result;
             }
+        } catch {
+            // All failed
         }
 
         contractCache.set(cacheKey, null);
         return null;
+    }
+
+    async function fetchFromSourcify(address, chainId) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2000);
+
+        const response = await fetch(
+            `https://sourcify.dev/server/files/any/${chainId}/${address}`,
+            { signal: controller.signal }
+        );
+        clearTimeout(timeout);
+
+        if (!response.ok) throw new Error('Not found');
+
+        const data = await response.json();
+        let contractName = null;
+        let abi = null;
+
+        if (data.files) {
+            const metadataFile = data.files.find(f => f.name === 'metadata.json');
+            if (metadataFile && metadataFile.content) {
+                const metadata = JSON.parse(metadataFile.content);
+                const compilationTarget = metadata.settings?.compilationTarget;
+                if (compilationTarget) {
+                    contractName = Object.values(compilationTarget)[0];
+                }
+                if (metadata.output?.abi) {
+                    abi = metadata.output.abi;
+                }
+            }
+        }
+
+        if (contractName || abi) {
+            return { name: contractName, abi };
+        }
+        throw new Error('No contract info');
+    }
+
+    async function fetchFromEtherscan(address, chainId, explorerApi) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 2000);
+
+        const response = await fetch(
+            `${explorerApi}?module=contract&action=getsourcecode&address=${address}`,
+            { signal: controller.signal }
+        );
+        clearTimeout(timeout);
+
+        if (!response.ok) throw new Error('Request failed');
+
+        const data = await response.json();
+        if (data.status === '1' && data.result && data.result.length > 0) {
+            const result = data.result[0];
+            const contractName = result.ContractName || null;
+            let abi = null;
+
+            if (result.ABI && result.ABI !== 'Contract source code not verified') {
+                try {
+                    abi = JSON.parse(result.ABI);
+                } catch {}
+            }
+
+            if (contractName || abi) {
+                return { name: contractName, abi };
+            }
+        }
+        throw new Error('No contract info');
     }
 
     // Build a selector -> function info map from an ABI
@@ -1070,6 +1077,12 @@
             return null;
         }
 
+        // Pre-fetch all token metadata in parallel
+        const tokenAddresses = changes
+            .filter(c => c.tokenAddress !== 'native')
+            .map(c => c.tokenAddress);
+        await Promise.all(tokenAddresses.map(addr => fetchTokenMetadata(addr, currentChainId)));
+
         const container = document.createElement('div');
         container.className = 'balance-changes';
 
@@ -1092,7 +1105,7 @@
         const grid = document.createElement('div');
         grid.className = 'balance-changes-grid';
 
-        // Render each balance change
+        // Render each balance change (metadata already cached)
         for (const change of changes) {
             const item = document.createElement('div');
             item.className = 'balance-change-item';
@@ -1118,7 +1131,7 @@
                     iconWrapper.textContent = 'Ξ';
                 }
             } else {
-                // Try to get token metadata
+                // Get from cache (already fetched above)
                 const metadata = await fetchTokenMetadata(change.tokenAddress, currentChainId);
                 if (metadata.logo) {
                     const img = document.createElement('img');
@@ -1225,6 +1238,9 @@
     // Pre-fetch all contract info and selectors in parallel
     async function prefetchTraceData(trace, chainId) {
         const { addresses, selectors } = collectTraceData(trace);
+        console.log(`Prefetching ${addresses.length} contracts, ${selectors.length} selectors`);
+
+        const startTime = performance.now();
 
         // Fetch all in parallel
         const promises = [];
@@ -1238,6 +1254,8 @@
         }
 
         await Promise.all(promises);
+
+        console.log(`Prefetch completed in ${(performance.now() - startTime).toFixed(0)}ms`);
     }
 
     async function loadSimulation(simulationId) {
@@ -1252,7 +1270,9 @@
         `;
 
         try {
+            console.time('API: fetch simulation');
             const response = await fetch(`/api/v1/simulation/${simulationId}`);
+            console.timeEnd('API: fetch simulation');
             if (!response.ok) {
                 throw new Error(`Simulation not found (${response.status})`);
             }
