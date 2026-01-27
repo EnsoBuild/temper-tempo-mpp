@@ -284,18 +284,72 @@ pub async fn fetch_debug_trace_call(
     Ok(trace)
 }
 
-/// Block explorer APIs by chain ID
-fn get_explorer_api(chain_id: u64) -> Option<&'static str> {
+/// Check if chain is supported by Etherscan V2 API
+fn is_etherscan_supported(chain_id: u64) -> bool {
+    matches!(chain_id, 1 | 137 | 56 | 42161 | 10 | 8453 | 11155111 | 17000)
+}
+
+/// Get legacy block explorer API for chains not on Etherscan V2
+fn get_legacy_explorer_api(chain_id: u64) -> Option<&'static str> {
     match chain_id {
-        1 => Some("https://api.etherscan.io/api"),
-        137 => Some("https://api.polygonscan.com/api"),
-        56 => Some("https://api.bscscan.com/api"),
-        42161 => Some("https://api.arbiscan.io/api"),
-        10 => Some("https://api-optimistic.etherscan.io/api"),
-        8453 => Some("https://api.basescan.org/api"),
         999 => Some("https://www.hyperscan.com/api"),
         _ => None,
     }
+}
+
+/// Try to fetch contract source from an Etherscan-compatible API
+async fn try_etherscan_api(client: &reqwest::Client, url: &str) -> Option<ContractSource> {
+    let response = client
+        .get(url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let data: serde_json::Value = response.json().await.ok()?;
+
+    if data.get("status").and_then(|s| s.as_str()) != Some("1") {
+        return None;
+    }
+
+    let result = data.get("result")?.as_array()?.first()?;
+
+    let contract_name = result.get("ContractName")
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let source_code = result.get("SourceCode")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+
+    if source_code.is_empty() || source_code == "Contract source code not verified" {
+        return None;
+    }
+
+    let abi_str = result.get("ABI")
+        .and_then(|a| a.as_str())
+        .unwrap_or("[]");
+
+    let abi: serde_json::Value = serde_json::from_str(abi_str)
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+    let mut sources = HashMap::new();
+    let file_name = format!("{}.sol", contract_name);
+    sources.insert(file_name.clone(), source_code.to_string());
+
+    Some(ContractSource {
+        name: contract_name,
+        sources,
+        source_list: vec![file_name],
+        abi,
+        source_map: String::new(),
+        source_locations: vec![],
+    })
 }
 
 /// Fetch contract source from Sourcify or block explorer
@@ -306,63 +360,34 @@ pub async fn fetch_contract_source(
 ) -> Result<Option<ContractSource>, String> {
     let client = http_client();
 
-    // Try block explorer first for chains like HyperEVM that may not be on Sourcify
-    if let Some(api_url) = get_explorer_api(chain_id) {
+    // Try Etherscan V2 API first (requires API key)
+    if let Some(key) = etherscan_key {
+        if is_etherscan_supported(chain_id) {
+            let url = format!(
+                "https://api.etherscan.io/v2/api?chainid={}&module=contract&action=getsourcecode&address={}&apikey={}",
+                chain_id, address, key
+            );
+
+            if let Some(source) = try_etherscan_api(&client, &url).await {
+                return Ok(Some(source));
+            }
+        }
+    }
+
+    // Try legacy explorer API for chains not on Etherscan V2
+    if let Some(api_url) = get_legacy_explorer_api(chain_id) {
         let mut url = format!(
             "{}?module=contract&action=getsourcecode&address={}",
             api_url, address
         );
 
-        // Add API key if available (required for Etherscan V2)
         if let Some(key) = etherscan_key {
             url.push_str("&apikey=");
             url.push_str(key);
         }
 
-        if let Ok(response) = client
-            .get(&url)
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
-        {
-            if response.status().is_success() {
-                if let Ok(data) = response.json::<serde_json::Value>().await {
-                    if data.get("status").and_then(|s| s.as_str()) == Some("1") {
-                        if let Some(result) = data.get("result").and_then(|r| r.as_array()).and_then(|a| a.first()) {
-                            let contract_name = result.get("ContractName")
-                                .and_then(|n| n.as_str())
-                                .unwrap_or("")
-                                .to_string();
-
-                            let source_code = result.get("SourceCode")
-                                .and_then(|s| s.as_str())
-                                .unwrap_or("");
-
-                            if !source_code.is_empty() && source_code != "Contract source code not verified" {
-                                let abi_str = result.get("ABI")
-                                    .and_then(|a| a.as_str())
-                                    .unwrap_or("[]");
-
-                                let abi: serde_json::Value = serde_json::from_str(abi_str)
-                                    .unwrap_or(serde_json::Value::Array(vec![]));
-
-                                let mut sources = HashMap::new();
-                                let file_name = format!("{}.sol", contract_name);
-                                sources.insert(file_name.clone(), source_code.to_string());
-
-                                return Ok(Some(ContractSource {
-                                    name: contract_name,
-                                    sources,
-                                    source_list: vec![file_name],
-                                    abi,
-                                    source_map: String::new(),
-                                    source_locations: vec![],
-                                }));
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some(source) = try_etherscan_api(&client, &url).await {
+            return Ok(Some(source));
         }
     }
 
