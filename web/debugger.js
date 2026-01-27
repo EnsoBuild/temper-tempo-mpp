@@ -946,9 +946,12 @@
             return addrNum < 256;
         };
 
-        // Pre-fetch sources for all unique addresses (excluding precompiles)
+        // Pre-fetch sources for all unique addresses in PARALLEL (excluding precompiles)
         const uniqueAddresses = [...new Set(callTrace.map(c => c.to).filter(a => a && !isPrecompile(a)))];
-        for (const addr of uniqueAddresses.slice(0, 15)) { // Limit to first 15 contracts
+        console.log(`Fetching sources for ${uniqueAddresses.length} contracts in parallel`);
+        const startFetch = performance.now();
+
+        await Promise.all(uniqueAddresses.slice(0, 15).map(async (addr) => {
             try {
                 const response = await fetch(`/api/v1/contract/${chainId}/${addr}/source`);
                 if (response.ok) {
@@ -956,9 +959,11 @@
                     contractSources.set(addr.toLowerCase(), source);
                 }
             } catch (e) {
-                console.log('No source for', addr);
+                // No source available
             }
-        }
+        }));
+
+        console.log(`Sources fetched in ${(performance.now() - startFetch).toFixed(0)}ms`);
 
         // Decode function selectors for calls
         const uniqueSelectors = [...new Set(callTrace.map(c => c.selector).filter(Boolean))];
