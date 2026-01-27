@@ -302,15 +302,22 @@ fn get_explorer_api(chain_id: u64) -> Option<&'static str> {
 pub async fn fetch_contract_source(
     address: &str,
     chain_id: u64,
+    etherscan_key: Option<&str>,
 ) -> Result<Option<ContractSource>, String> {
     let client = http_client();
 
     // Try block explorer first for chains like HyperEVM that may not be on Sourcify
     if let Some(api_url) = get_explorer_api(chain_id) {
-        let url = format!(
+        let mut url = format!(
             "{}?module=contract&action=getsourcecode&address={}",
             api_url, address
         );
+
+        // Add API key if available (required for Etherscan V2)
+        if let Some(key) = etherscan_key {
+            url.push_str("&apikey=");
+            url.push_str(key);
+        }
 
         if let Ok(response) = client
             .get(&url)

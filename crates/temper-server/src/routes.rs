@@ -9,6 +9,7 @@ use warp::{Filter, Rejection, Reply};
 use temper_core::{SimulationRequest, StatefulSimulationRequest};
 
 use crate::config::Config;
+use crate::contract_cache::ContractCacheService;
 use crate::handlers;
 use crate::storage::StorageService;
 use crate::SharedSimulationState;
@@ -18,6 +19,7 @@ pub fn api_routes(
     config: Config,
     state: Arc<SharedSimulationState>,
     storage: Option<Arc<StorageService>>,
+    contract_cache: Option<Arc<ContractCacheService>>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     simulate(config.clone(), storage.clone())
         .or(simulate_bundle(config.clone(), storage.clone()))
@@ -28,7 +30,7 @@ pub fn api_routes(
         .or(get_simulation_trace(storage.clone()))
         .or(get_simulation_debug(config.clone(), storage))
         .or(debug_trace(config.clone()))
-        .or(contract_source())
+        .or(contract_source(config, contract_cache))
 }
 
 /// POST /simulate
@@ -138,9 +140,14 @@ fn debug_trace(
 }
 
 /// GET /contract/{chainId}/{address}/source
-fn contract_source() -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
+fn contract_source(
+    config: Config,
+    contract_cache: Option<Arc<ContractCacheService>>,
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::path!("contract" / u64 / String / "source")
         .and(warp::get())
+        .and(with_config(config))
+        .and(with_contract_cache(contract_cache))
         .and_then(handlers::get_contract_source)
 }
 
@@ -174,6 +181,13 @@ fn with_required_storage(
         .and_then(|storage: Option<Arc<StorageService>>| async move {
             storage.ok_or_else(warp::reject::not_found)
         })
+}
+
+fn with_contract_cache(
+    cache: Option<Arc<ContractCacheService>>,
+) -> impl Filter<Extract = (Option<Arc<ContractCacheService>>,), Error = std::convert::Infallible> + Clone
+{
+    warp::any().map(move || cache.clone())
 }
 
 fn json_body<T: DeserializeOwned + Send>(

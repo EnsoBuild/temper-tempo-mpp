@@ -15,6 +15,7 @@ use temper_core::{
 };
 
 use crate::config::Config;
+use crate::contract_cache::ContractCacheService;
 use crate::errors::{
     IncorrectChainIdError, InvalidBlockNumbersError, MultipleChainIdsError, NoURLForChainIdError,
     SimulationNotFound, StateNotFound,
@@ -374,14 +375,32 @@ pub async fn get_debug_trace(
     Ok(warp::reply::json(&trace))
 }
 
-/// GET /contract/{chainId}/{address}/source - Get contract source from Sourcify
+/// GET /contract/{chainId}/{address}/source - Get contract source from cache or external sources
 pub async fn get_contract_source(
     chain_id: u64,
     address: String,
+    config: Config,
+    contract_cache: Option<Arc<ContractCacheService>>,
 ) -> Result<Json, Rejection> {
     log::info!("Fetching source for {} on chain {}", address, chain_id);
 
-    match crate::debugger::fetch_contract_source(&address, chain_id).await {
+    // Try cache first if available
+    if let Some(cache) = contract_cache {
+        match cache.get_contract_source(chain_id, &address).await {
+            Ok(Some(source)) => return Ok(warp::reply::json(&source)),
+            Ok(None) => {
+                log::info!("No verified source found for {}", address);
+                return Err(warp::reject::not_found());
+            }
+            Err(e) => {
+                log::error!("Failed to fetch source: {}", e);
+                return Err(warp::reject::custom(crate::errors::TraceFetchError(e)));
+            }
+        }
+    }
+
+    // Fallback to direct fetch without caching
+    match crate::debugger::fetch_contract_source(&address, chain_id, config.etherscan_key.as_deref()).await {
         Ok(Some(source)) => Ok(warp::reply::json(&source)),
         Ok(None) => {
             log::info!("No verified source found for {}", address);

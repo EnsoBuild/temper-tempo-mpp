@@ -9,6 +9,7 @@ use warp::Filter;
 use temper_db::Database;
 use temper_server::{
     config::config,
+    contract_cache::ContractCacheService,
     errors::handle_rejection,
     routes::api_routes,
     storage::StorageService,
@@ -27,20 +28,20 @@ async fn main() {
     let api_key = config.api_key.clone();
 
     // Initialize database if storage is enabled
-    let storage = if config.storage_enabled {
+    let (storage, contract_cache) = if config.storage_enabled {
         match init_storage(&config).await {
-            Ok(storage) => {
-                log::info!(target: "temper_server", "Storage enabled");
-                Some(Arc::new(storage))
+            Ok((storage, cache)) => {
+                log::info!(target: "temper_server", "Storage enabled with contract cache");
+                (Some(Arc::new(storage)), Some(Arc::new(cache)))
             }
             Err(e) => {
                 log::error!(target: "temper_server", "Failed to initialize storage: {}", e);
-                None
+                (None, None)
             }
         }
     } else {
         log::info!(target: "temper_server", "Storage disabled");
-        None
+        (None, None)
     };
 
     let shared_state = Arc::new(SharedSimulationState {
@@ -58,7 +59,7 @@ async fn main() {
         api_base.boxed()
     };
 
-    let api = api_base.and(api_routes(config.clone(), shared_state, storage.clone()));
+    let api = api_base.and(api_routes(config.clone(), shared_state, storage.clone(), contract_cache));
 
     // Build routes with optional web UI
     let routes = if config.web_ui_enabled {
@@ -77,7 +78,7 @@ async fn main() {
     warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
 
-async fn init_storage(config: &Config) -> eyre::Result<StorageService> {
+async fn init_storage(config: &Config) -> eyre::Result<(StorageService, ContractCacheService)> {
     let db_path = config
         .database_url
         .as_ref()
@@ -96,7 +97,10 @@ async fn init_storage(config: &Config) -> eyre::Result<StorageService> {
     let db = Database::open(&db_path)?;
     db.init().await?;
 
-    Ok(StorageService::new(&db, config.clone()))
+    let storage = StorageService::new(&db, config.clone());
+    let contract_cache = ContractCacheService::new(&db, config.etherscan_key.clone());
+
+    Ok((storage, contract_cache))
 }
 
 /// Web UI routes for viewing simulations

@@ -1,6 +1,7 @@
 //! Temper Server - HTTP server for simulation API
 
 pub mod config;
+pub mod contract_cache;
 pub mod debugger;
 pub mod errors;
 pub mod handlers;

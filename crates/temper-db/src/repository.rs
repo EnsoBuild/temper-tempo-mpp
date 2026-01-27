@@ -4,7 +4,7 @@ use std::sync::Arc;
 use rusqlite::{params, Connection};
 use tokio::sync::Mutex;
 
-use crate::models::{FullSimulation, StoredLog, StoredSimulation, StoredTrace};
+use crate::models::{CachedContract, FullSimulation, StoredLog, StoredSimulation, StoredTrace};
 
 /// Repository for simulation database operations
 pub struct SimulationRepository {
@@ -245,5 +245,269 @@ mod tests {
         let (_db, repo) = setup_db().await;
         let result = repo.get_simulation("nonexistent").await.unwrap();
         assert!(result.is_none());
+    }
+}
+
+/// Repository for contract cache operations
+pub struct ContractCacheRepository {
+    conn: Arc<Mutex<Connection>>,
+}
+
+impl ContractCacheRepository {
+    pub fn new(conn: Arc<Mutex<Connection>>) -> Self {
+        Self { conn }
+    }
+
+    /// Get a cached contract by chain_id and address
+    pub async fn get_contract(&self, chain_id: u64, address: &str) -> eyre::Result<Option<CachedContract>> {
+        let address = address.to_lowercase();
+        let conn = self.conn.lock().await;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT chain_id, address, name, abi, selectors, source_code, cached_at, last_accessed
+            FROM contract_cache WHERE chain_id = ?1 AND address = ?2
+            "#,
+        )?;
+
+        let result = stmt.query_row(params![chain_id as i64, address], |row| {
+            Ok(CachedContract {
+                chain_id: row.get::<_, i64>(0)? as u64,
+                address: row.get(1)?,
+                name: row.get(2)?,
+                abi: row.get(3)?,
+                selectors: row.get(4)?,
+                source_code: row.get(5)?,
+                cached_at: row.get(6)?,
+                last_accessed: row.get(7)?,
+            })
+        });
+
+        match result {
+            Ok(contract) => Ok(Some(contract)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Cache a contract (insert or replace)
+    pub async fn cache_contract(&self, contract: &CachedContract) -> eyre::Result<()> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO contract_cache (
+                chain_id, address, name, abi, selectors, source_code, cached_at, last_accessed
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+            params![
+                contract.chain_id as i64,
+                contract.address.to_lowercase(),
+                contract.name,
+                contract.abi,
+                contract.selectors,
+                contract.source_code,
+                contract.cached_at,
+                contract.last_accessed,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Update last_accessed timestamp for a contract
+    pub async fn update_last_accessed(&self, chain_id: u64, address: &str) -> eyre::Result<()> {
+        let address = address.to_lowercase();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "UPDATE contract_cache SET last_accessed = ?1 WHERE chain_id = ?2 AND address = ?3",
+            params![now, chain_id as i64, address],
+        )?;
+        Ok(())
+    }
+
+    /// Get total cache size in bytes (approximate based on TEXT column lengths)
+    pub async fn get_cache_size(&self) -> eyre::Result<u64> {
+        let conn = self.conn.lock().await;
+        let size: i64 = conn.query_row(
+            r#"
+            SELECT COALESCE(SUM(
+                LENGTH(address) +
+                COALESCE(LENGTH(name), 0) +
+                COALESCE(LENGTH(abi), 0) +
+                COALESCE(LENGTH(selectors), 0) +
+                COALESCE(LENGTH(source_code), 0)
+            ), 0) FROM contract_cache
+            "#,
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(size as u64)
+    }
+
+    /// Get count of cached contracts
+    pub async fn get_cache_count(&self) -> eyre::Result<u64> {
+        let conn = self.conn.lock().await;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM contract_cache",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(count as u64)
+    }
+
+    /// Evict least recently used contracts until cache is below target size
+    /// Returns number of contracts evicted
+    pub async fn evict_lru(&self, max_size_bytes: u64) -> eyre::Result<u64> {
+        let current_size = self.get_cache_size().await?;
+        if current_size <= max_size_bytes {
+            return Ok(0);
+        }
+
+        let conn = self.conn.lock().await;
+        let mut evicted = 0u64;
+
+        // Get contracts ordered by last_accessed (oldest first)
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT chain_id, address,
+                   LENGTH(address) + COALESCE(LENGTH(name), 0) + COALESCE(LENGTH(abi), 0) +
+                   COALESCE(LENGTH(selectors), 0) + COALESCE(LENGTH(source_code), 0) as size
+            FROM contract_cache
+            ORDER BY last_accessed ASC
+            "#,
+        )?;
+
+        let contracts: Vec<(i64, String, i64)> = stmt
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        drop(stmt);
+
+        let mut freed = 0u64;
+        let target_free = current_size - max_size_bytes;
+
+        for (chain_id, address, size) in contracts {
+            if freed >= target_free {
+                break;
+            }
+            conn.execute(
+                "DELETE FROM contract_cache WHERE chain_id = ?1 AND address = ?2",
+                params![chain_id, address],
+            )?;
+            freed += size as u64;
+            evicted += 1;
+        }
+
+        Ok(evicted)
+    }
+
+    /// Delete contracts not accessed since the given timestamp
+    pub async fn delete_stale(&self, older_than: i64) -> eyre::Result<u64> {
+        let conn = self.conn.lock().await;
+        let deleted = conn.execute(
+            "DELETE FROM contract_cache WHERE last_accessed < ?1",
+            params![older_than],
+        )?;
+        Ok(deleted as u64)
+    }
+}
+
+#[cfg(test)]
+mod contract_cache_tests {
+    use super::*;
+    use crate::Database;
+
+    async fn setup_db() -> (Database, ContractCacheRepository) {
+        let db = Database::open_in_memory().unwrap();
+        db.init().await.unwrap();
+        let repo = ContractCacheRepository::new(db.connection());
+        (db, repo)
+    }
+
+    #[tokio::test]
+    async fn test_cache_and_get_contract() {
+        let (_db, repo) = setup_db().await;
+
+        let contract = CachedContract {
+            chain_id: 1,
+            address: "0x1234567890123456789012345678901234567890".to_string(),
+            name: Some("TestToken".to_string()),
+            abi: Some(r#"[{"type":"function","name":"transfer"}]"#.to_string()),
+            selectors: Some(r#"{"a9059cbb":"transfer(address,uint256)"}"#.to_string()),
+            source_code: Some("contract TestToken {}".to_string()),
+            cached_at: 1234567890,
+            last_accessed: 1234567890,
+        };
+
+        repo.cache_contract(&contract).await.unwrap();
+
+        let retrieved = repo.get_contract(1, "0x1234567890123456789012345678901234567890").await.unwrap();
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.name, Some("TestToken".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_nonexistent_contract() {
+        let (_db, repo) = setup_db().await;
+        let result = repo.get_contract(1, "0xnonexistent").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cache_size() {
+        let (_db, repo) = setup_db().await;
+
+        let contract = CachedContract {
+            chain_id: 1,
+            address: "0x1234".to_string(),
+            name: Some("Test".to_string()),
+            abi: Some("[]".to_string()),
+            selectors: None,
+            source_code: Some("x".repeat(1000)),
+            cached_at: 1234567890,
+            last_accessed: 1234567890,
+        };
+
+        repo.cache_contract(&contract).await.unwrap();
+
+        let size = repo.get_cache_size().await.unwrap();
+        assert!(size > 1000); // At least the source code
+    }
+
+    #[tokio::test]
+    async fn test_lru_eviction() {
+        let (_db, repo) = setup_db().await;
+
+        // Add several contracts with different access times
+        for i in 0..5 {
+            let contract = CachedContract {
+                chain_id: 1,
+                address: format!("0x{:040x}", i),
+                name: Some(format!("Contract{}", i)),
+                abi: None,
+                selectors: None,
+                source_code: Some("x".repeat(100)),
+                cached_at: 1000 + i,
+                last_accessed: 1000 + i, // Older contracts have older access times
+            };
+            repo.cache_contract(&contract).await.unwrap();
+        }
+
+        let count_before = repo.get_cache_count().await.unwrap();
+        assert_eq!(count_before, 5);
+
+        // Evict to a small size (should remove oldest contracts)
+        let evicted = repo.evict_lru(200).await.unwrap();
+        assert!(evicted > 0);
+
+        let count_after = repo.get_cache_count().await.unwrap();
+        assert!(count_after < count_before);
     }
 }

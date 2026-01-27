@@ -47,3 +47,16 @@ pub struct FullSimulation {
     pub trace: Option<StoredTrace>,
     pub logs: Vec<StoredLog>,
 }
+
+/// Cached contract metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedContract {
+    pub chain_id: u64,
+    pub address: String,
+    pub name: Option<String>,
+    pub abi: Option<String>,        // JSON ABI
+    pub selectors: Option<String>,  // JSON map: selector -> function signature
+    pub source_code: Option<String>,
+    pub cached_at: i64,
+    pub last_accessed: i64,
+}
