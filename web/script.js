@@ -60,6 +60,47 @@
         return NATIVE_TOKENS[currentChainId] || { symbol: 'ETH', decimals: 18, logo: null };
     }
 
+    // Chain names
+    const CHAIN_NAMES = {
+        1: 'Ethereum',
+        10: 'Optimism',
+        56: 'BNB Chain',
+        100: 'Gnosis',
+        137: 'Polygon',
+        250: 'Fantom',
+        999: 'HyperEVM',
+        8453: 'Base',
+        42161: 'Arbitrum',
+        43114: 'Avalanche',
+    };
+
+    function getChainName(chainId) {
+        return CHAIN_NAMES[chainId] || `Chain ${chainId}`;
+    }
+
+    function getChainIcon(chainId) {
+        const icons = {
+            1: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+            10: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/optimism/info/logo.png',
+            56: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png',
+            137: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+            8453: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+            42161: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png',
+            43114: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png',
+        };
+        return icons[chainId] || null;
+    }
+
+    function truncateValue(value) {
+        if (!value) return '';
+        const str = String(value);
+        if (str.length <= 20) return str;
+        if (str.startsWith('0x')) {
+            return str.slice(0, 10) + '...' + str.slice(-8);
+        }
+        return str.slice(0, 16) + '...';
+    }
+
     // Token metadata cache
     const tokenMetadataCache = new Map();
 
@@ -1282,144 +1323,127 @@
 
             app.innerHTML = '';
 
-            // Header
-            const header = document.createElement('header');
+            // Get trace for display
+            const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
+            const chainName = getChainName(currentChainId);
+            const chainIcon = getChainIcon(currentChainId);
+
+            // Tenderly-style header
+            const header = document.createElement('div');
+            header.className = 'tenderly-header';
             header.innerHTML = `
-                <div class="logo">
-                    <div class="logo-icon">T</div>
-                    <h1>Temper</h1>
+                <div class="tenderly-header-top">
+                    <div class="tenderly-title">
+                        <span class="tenderly-sim-label">Simulation</span>
+                        <span class="tenderly-sim-id">${simulationId}</span>
+                    </div>
+                    <div class="tenderly-network">
+                        ${chainIcon ? `<img src="${chainIcon}" class="chain-icon" alt="${chainName}">` : ''}
+                        <span>${chainName}</span>
+                    </div>
                 </div>
-                <div class="simulation-id">${simulationId}</div>
             `;
             app.appendChild(header);
 
-            // Get trace for display
-            const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
+            // Main summary card (Tenderly-style)
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'tenderly-summary';
 
-            // Revert banner (if transaction reverted) - show prominently at top
+            // Status badge
+            const statusBadge = simulation.success
+                ? '<span class="status-badge success">Success</span>'
+                : '<span class="status-badge failed">Failed</span>';
+
+            // Decode function call if possible
+            let functionDisplay = '';
+            if (trace && trace.input && trace.input !== '0x' && trace.input.length >= 10) {
+                const selector = trace.input.slice(0, 10);
+                const sig = await lookupSelector(selector);
+                if (sig) {
+                    const decoded = await decodeCalldata(trace.input, sig);
+                    functionDisplay = `
+                        <div class="summary-row function-row">
+                            <span class="summary-label">Function</span>
+                            <div class="function-call">
+                                <span class="function-name">${decoded.name}</span>
+                                <span class="function-params">(${decoded.params.map(p =>
+                                    `<span class="param"><span class="param-name">${p.name}</span>: <span class="param-value" title="${p.value}">${truncateValue(p.value)}</span></span>`
+                                ).join(', ')})</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    functionDisplay = `
+                        <div class="summary-row">
+                            <span class="summary-label">Function</span>
+                            <span class="summary-value mono">${selector}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Revert reason if failed
+            let revertDisplay = '';
             if (!simulation.success) {
                 const revertReason = extractRevertReason(trace);
-                const revertBanner = document.createElement('div');
-                revertBanner.className = 'revert-banner';
-                revertBanner.innerHTML = `
-                    <div class="revert-icon">⚠️</div>
-                    <div class="revert-content">
-                        <div class="revert-title">Transaction Reverted</div>
-                        <div class="revert-reason">${revertReason || 'No revert reason provided'}</div>
+                revertDisplay = `
+                    <div class="revert-section">
+                        <span class="revert-label">Revert Reason</span>
+                        <span class="revert-message">${revertReason || 'No revert reason provided'}</span>
                     </div>
-                    ${simulation.txHash ? `<button class="revert-debug-btn" id="jumpToRevertBtn">Debug Revert →</button>` : ''}
                 `;
-                app.appendChild(revertBanner);
             }
 
-            // Transaction Overview panel
-            if (trace) {
-                const overview = document.createElement('div');
-                overview.className = 'tx-overview';
-
-                const overviewTitle = document.createElement('div');
-                overviewTitle.className = 'tx-overview-title';
-                overviewTitle.textContent = 'Transaction Overview';
-                overview.appendChild(overviewTitle);
-
-                const overviewGrid = document.createElement('div');
-                overviewGrid.className = 'tx-overview-grid';
-
-                // Transaction Hash (if available)
-                if (simulation.txHash) {
-                    const hashRow = document.createElement('div');
-                    hashRow.className = 'tx-overview-row';
-                    hashRow.innerHTML = `<span class="tx-overview-label">Tx Hash</span>`;
-                    const hashValue = document.createElement('span');
-                    hashValue.className = 'tx-overview-value mono';
-                    hashValue.textContent = simulation.txHash;
-                    hashRow.appendChild(hashValue);
-                    hashRow.appendChild(createCopyIcon(simulation.txHash));
-                    overviewGrid.appendChild(hashRow);
-                }
-
-                // From
-                const fromRow = document.createElement('div');
-                fromRow.className = 'tx-overview-row';
-                fromRow.innerHTML = `<span class="tx-overview-label">From</span>`;
-                const fromValue = document.createElement('span');
-                fromValue.className = 'tx-overview-value address';
-                fromValue.textContent = trace.from || 'N/A';
-                fromRow.appendChild(fromValue);
-                if (trace.from) fromRow.appendChild(createCopyIcon(trace.from));
-                overviewGrid.appendChild(fromRow);
-
-                // To
-                const toRow = document.createElement('div');
-                toRow.className = 'tx-overview-row';
-                toRow.innerHTML = `<span class="tx-overview-label">To</span>`;
-                const toValue = document.createElement('span');
-                toValue.className = 'tx-overview-value address';
-                toValue.textContent = trace.to || 'Contract Creation';
-                toRow.appendChild(toValue);
-                if (trace.to) toRow.appendChild(createCopyIcon(trace.to));
-                overviewGrid.appendChild(toRow);
-
-                // Value
-                const valueRow = document.createElement('div');
-                valueRow.className = 'tx-overview-row';
-                valueRow.innerHTML = `<span class="tx-overview-label">Value</span>`;
-                const valueDisplay = document.createElement('span');
-                valueDisplay.className = 'tx-overview-value';
-                const formattedVal = formatValue(trace.value);
-                valueDisplay.textContent = formattedVal || `0 ${getNativeToken()}`;
-                valueRow.appendChild(valueDisplay);
-                overviewGrid.appendChild(valueRow);
-
-                // Input Data
-                if (trace.input && trace.input !== '0x') {
-                    const inputRow = document.createElement('div');
-                    inputRow.className = 'tx-overview-row';
-                    inputRow.innerHTML = `<span class="tx-overview-label">Input Data</span>`;
-                    const inputValue = document.createElement('span');
-                    inputValue.className = 'tx-overview-value mono';
-                    const inputData = trace.input;
-                    inputValue.textContent = inputData.length > 66
-                        ? inputData.slice(0, 34) + '...' + inputData.slice(-32)
-                        : inputData;
-                    inputValue.title = inputData;
-                    inputRow.appendChild(inputValue);
-                    inputRow.appendChild(createCopyIcon(inputData));
-                    overviewGrid.appendChild(inputRow);
-                }
-
-                overview.appendChild(overviewGrid);
-                app.appendChild(overview);
-            }
+            summaryCard.innerHTML = `
+                <div class="summary-grid">
+                    <div class="summary-left">
+                        <div class="summary-row">
+                            <span class="summary-label">Status</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">From</span>
+                            <span class="summary-value address">${trace?.from || 'N/A'}</span>
+                            ${trace?.from ? createCopyIcon(trace.from).outerHTML : ''}
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Interacted With</span>
+                            <span class="summary-value address">${trace?.to || 'Contract Creation'}</span>
+                            ${trace?.to ? createCopyIcon(trace.to).outerHTML : ''}
+                        </div>
+                        ${functionDisplay}
+                    </div>
+                    <div class="summary-right">
+                        <div class="summary-row">
+                            <span class="summary-label">Block Number</span>
+                            <span class="summary-value">${simulation.blockNumber?.toLocaleString() || 'N/A'}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Gas Used</span>
+                            <span class="summary-value">${simulation.gasUsed?.toLocaleString() || 'N/A'}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Value</span>
+                            <span class="summary-value">${formatValue(trace?.value) || `0 ${getNativeToken()}`}</span>
+                        </div>
+                        ${simulation.txHash ? `
+                        <div class="summary-row">
+                            <span class="summary-label">Tx Hash</span>
+                            <span class="summary-value mono truncate" title="${simulation.txHash}">${simulation.txHash.slice(0, 10)}...${simulation.txHash.slice(-8)}</span>
+                            ${createCopyIcon(simulation.txHash).outerHTML}
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+                ${revertDisplay}
+            `;
+            app.appendChild(summaryCard);
 
             // Balance changes
             const balanceChanges = await renderBalanceChanges(simulation);
             if (balanceChanges) {
                 app.appendChild(balanceChanges);
             }
-
-            // Simulation meta
-            const meta = document.createElement('div');
-            meta.className = 'simulation-meta';
-            meta.innerHTML = `
-                <div class="meta-card">
-                    <div class="meta-label">Status</div>
-                    <div class="meta-value ${simulation.success ? 'success' : 'failed'}">${simulation.success ? 'Success' : 'Reverted'}</div>
-                </div>
-                <div class="meta-card">
-                    <div class="meta-label">Gas Used</div>
-                    <div class="meta-value">${simulation.gasUsed?.toLocaleString() || 'N/A'}</div>
-                </div>
-                <div class="meta-card">
-                    <div class="meta-label">Block</div>
-                    <div class="meta-value">${simulation.blockNumber?.toLocaleString() || 'N/A'}</div>
-                </div>
-                <div class="meta-card">
-                    <div class="meta-label">Chain ID</div>
-                    <div class="meta-value">${currentChainId}</div>
-                </div>
-            `;
-            app.appendChild(meta);
 
             // Trace output
             const traceSection = document.createElement('section');
