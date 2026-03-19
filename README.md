@@ -1,6 +1,6 @@
 # Temper for Tempo and MPP (POC)
 
-**EVM transaction simulation API with a built-in trace viewer, debugger, and machine-to-machine payments via [MPP](https://mpp.dev).**
+**EVM transaction simulation API with a built-in, link-sharable trace viewer/debugger, and machine-to-machine payments via [MPP](https://mpp.dev).**
 
 [![test](https://github.com/EnsoFinance/temper/actions/workflows/test.yaml/badge.svg)](https://github.com/EnsoFinance/temper/actions/workflows/test.yaml)
 
