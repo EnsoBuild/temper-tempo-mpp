@@ -62,8 +62,10 @@ struct CredentialChallenge {
 
 #[derive(Debug, Deserialize)]
 struct CredentialPayload {
-    /// Transaction hash proving payment
+    /// Transaction hash (if client already broadcast)
     hash: Option<String>,
+    /// Signed transaction bytes (if server should broadcast)
+    signature: Option<String>,
 }
 
 /// Custom warp rejection for 402 Payment Required
@@ -155,9 +157,12 @@ impl MppState {
         let token = auth_header
             .strip_prefix("Payment ")
             .ok_or("Invalid auth scheme")?;
+        log::info!("MPP: Token (first 80 chars): {}", &token[..token.len().min(80)]);
         let decoded = URL_SAFE_NO_PAD
             .decode(token)
             .map_err(|e| format!("Invalid base64: {}", e))?;
+        let decoded_str = String::from_utf8_lossy(&decoded);
+        log::info!("MPP: Decoded credential: {}", &decoded_str[..decoded_str.len().min(300)]);
         let credential: Credential =
             serde_json::from_slice(&decoded).map_err(|e| format!("Invalid credential JSON: {}", e))?;
 
@@ -167,15 +172,64 @@ impl MppState {
             return Err("Missing challenge ID".to_string());
         }
 
-        // Get tx hash from payload
-        let tx_hash = credential
-            .payload
-            .hash
-            .as_ref()
-            .ok_or("Missing tx hash in payload")?;
+        // Get tx hash: either directly provided or by broadcasting the signed tx
+        let tx_hash = if let Some(ref hash) = credential.payload.hash {
+            hash.clone()
+        } else if let Some(ref signature) = credential.payload.signature {
+            // Broadcast the signed transaction
+            log::info!("MPP: Broadcasting signed transaction...");
+            self.broadcast_tx(signature).await?
+        } else {
+            return Err("Missing both 'hash' and 'signature' in payload".to_string());
+        };
 
-        // Verify on-chain: fetch receipt and check Transfer event
-        self.verify_transfer(tx_hash).await
+        log::info!("MPP: Verifying transfer for tx {}", tx_hash);
+        // Wait for receipt (tx may need to be mined)
+        for attempt in 0..10 {
+            match self.verify_transfer(&tx_hash).await {
+                Ok(()) => return Ok(()),
+                Err(e) if e.contains("No logs") || e.contains("No result") => {
+                    if attempt < 9 {
+                        log::info!("MPP: Waiting for tx to be mined (attempt {}/10)...", attempt + 1);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                        continue;
+                    }
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Err("Timeout waiting for transaction receipt".to_string())
+    }
+
+    /// Broadcast a signed transaction and return the tx hash
+    async fn broadcast_tx(&self, signed_tx: &str) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .post(&self.rpc_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "eth_sendRawTransaction",
+                "params": [signed_tx],
+                "id": 1
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("RPC broadcast failed: {}", e))?;
+
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Invalid RPC response: {}", e))?;
+
+        if let Some(error) = json.get("error") {
+            return Err(format!("Broadcast error: {}", error));
+        }
+
+        json.get("result")
+            .and_then(|r| r.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| "No tx hash in broadcast response".to_string())
     }
 
     /// Verify a TIP-20 Transfer event in the transaction receipt
@@ -198,9 +252,12 @@ impl MppState {
             .await
             .map_err(|e| format!("Invalid RPC response: {}", e))?;
 
-        let result = json
-            .get("result")
-            .ok_or("No result in receipt response")?;
+        let result = json.get("result").ok_or("No result in receipt response")?;
+
+        // Null result = tx not yet mined
+        if result.is_null() {
+            return Err("No logs in receipt".to_string()); // triggers retry in poll loop
+        }
 
         // Check status
         let status = result
@@ -208,7 +265,7 @@ impl MppState {
             .and_then(|s| s.as_str())
             .unwrap_or("0x0");
         if status != "0x1" {
-            return Err("Transaction failed".to_string());
+            return Err("Transaction reverted".to_string());
         }
 
         // Check Transfer event: topic0 = Transfer(address,address,uint256)
@@ -301,8 +358,12 @@ async fn check_payment(
     // Check for payment credential
     match auth_header {
         Some(ref h) if h.starts_with("Payment ") => {
+            log::info!("MPP: Received payment credential (len={})", h.len());
             match state.verify_credential(h).await {
-                Ok(()) => Ok(()),
+                Ok(()) => {
+                    log::info!("MPP: Payment verified successfully");
+                    Ok(())
+                }
                 Err(e) => {
                     log::warn!("MPP credential verification failed: {}", e);
                     Err(warp::reject::custom(PaymentRequired {
@@ -311,8 +372,14 @@ async fn check_payment(
                 }
             }
         }
+        Some(ref h) => {
+            log::info!("MPP: Got auth header but not Payment scheme: {}", &h[..h.len().min(50)]);
+            Err(warp::reject::custom(PaymentRequired {
+                www_authenticate: state.generate_challenge(),
+            }))
+        }
         _ => {
-            // No credential — return 402 with challenge
+            log::info!("MPP: No auth header — returning 402 challenge");
             Err(warp::reject::custom(PaymentRequired {
                 www_authenticate: state.generate_challenge(),
             }))
