@@ -44,8 +44,8 @@ impl StorageService {
             created_at: now,
             chain_id: request.chain_id,
             block_number: response.block_number,
-            from_address: format!("{:?}", request.from),
-            to_address: request.to.map(|a| format!("{:?}", a)),
+            from_address: format!("{:?}", response.tx_from.unwrap_or(request.from)),
+            to_address: response.tx_to.or(request.to).map(|a| format!("{:?}", a)),
             value: request.value.map(|v| format!("0x{:x}", v)).unwrap_or_else(|| "0x0".to_string()),
             gas_limit: format!("0x{:x}", request.gas_limit),
             gas_used: response.gas_used,
@@ -136,8 +136,8 @@ impl StorageService {
                     is_tempo_tx: None,
                     fee_token: None,
                     transaction_type: None,
-                    tx_from: None,
-                    tx_to: None,
+                    tx_from: sim.from_address.parse().ok(),
+                    tx_to: sim.to_address.as_deref().and_then(|a| a.parse().ok()),
                 }))
             }
             None => Ok(None),
