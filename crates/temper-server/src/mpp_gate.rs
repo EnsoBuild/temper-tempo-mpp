@@ -27,8 +27,9 @@ pub struct MppState {
     pub currency: String,
     pub chain_id: u64,
     pub rpc_url: String,
-    /// Track IPs that have used their free request
-    pub seen_ips: DashMap<IpAddr, ()>,
+    /// Track request count per IP (first N are free)
+    pub request_counts: DashMap<IpAddr, u32>,
+    pub free_requests: u32,
 }
 
 /// The charge request advertised in the challenge
@@ -111,7 +112,8 @@ impl MppState {
             currency,
             chain_id,
             rpc_url,
-            seen_ips: DashMap::new(),
+            request_counts: DashMap::new(),
+            free_requests: 10,
         })
     }
 
@@ -286,11 +288,12 @@ async fn check_payment(
         None => return Ok(()), // MPP disabled
     };
 
-    // First request per IP is free
+    // First N requests per IP are free
     if let Some(addr) = remote {
         let ip = addr.ip();
-        if !state.seen_ips.contains_key(&ip) {
-            state.seen_ips.insert(ip, ());
+        let mut count = state.request_counts.entry(ip).or_insert(0);
+        *count += 1;
+        if *count <= state.free_requests {
             return Ok(());
         }
     }
