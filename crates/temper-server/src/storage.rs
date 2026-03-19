@@ -133,6 +133,9 @@ impl StorageService {
                     exit_reason,
                     return_data,
                     call_results: None,
+                    is_tempo_tx: None,
+                    fee_token: None,
+                    transaction_type: None,
                 }))
             }
             None => Ok(None),

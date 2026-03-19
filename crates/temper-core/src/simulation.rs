@@ -11,16 +11,29 @@ use crate::evm::{
 #[cfg(feature = "tempo")]
 use crate::tip20;
 
-/// Tempo chain ID for testnet
-#[cfg(feature = "tempo")]
-const TEMPO_TESTNET_CHAIN_ID: u64 = 42429;
+/// Tempo chain IDs
+pub const TEMPO_MAINNET_CHAIN_ID: u64 = 4217;
+pub const TEMPO_TESTNET_CHAIN_ID: u64 = 42429;
+pub const TEMPO_MODERATO_CHAIN_ID: u64 = 42431;
 
-/// TIP-20 bytecode with REAL storage access for balanceOf
-#[cfg(feature = "tempo")]
-const TIP20_BYTECODE: &str = "6004351919600052600960205260406000205460005260206000f3";
+/// Returns true if this chain ID is a Tempo chain (has TIP-20 precompiles)
+pub fn is_tempo_chain(chain_id: u64) -> bool {
+    matches!(chain_id, TEMPO_MAINNET_CHAIN_ID | TEMPO_TESTNET_CHAIN_ID | TEMPO_MODERATO_CHAIN_ID)
+}
 
-/// Get the TIP-20 bytecode as Bytes
-#[cfg(feature = "tempo")]
+/// Returns true if the address is a TIP-20 precompile (starts with 0x20c0)
+fn is_tip20_address(addr: &Address) -> bool {
+    let b = addr.as_slice();
+    b.len() >= 2 && b[0] == 0x20 && b[1] == 0xc0
+}
+
+/// Full ERC20 runtime bytecode that implements TIP-20 storage layout:
+///   slot 8  = totalSupply
+///   slot 9  = balances mapping(address => uint256)
+///   slot 10 = allowances mapping(address => mapping(address => uint256))
+/// Compiled from Solidity 0.8.29, optimizer 200 runs.
+const TIP20_BYTECODE: &str = "608060405234801561000f575f5ffd5b506004361061007a575f3560e01c8063313ce56711610058578063313ce5671461012957806370a0823114610138578063a9059cbb1461014b578063dd62ed3e1461015e575f5ffd5b8063095ea7b31461007e57806318160ddd1461010457806323b872dd14610116575b5f5ffd5b6100ef61008c3660046104eb565b6040805133602080830191909152600a828401528251808303840181526060830184528051908201206001600160a01b0395909516608083015260a0808301959095528251808303909501855260c0909101909152825192019190912055600190565b60405190151581526020015b60405180910390f35b6008545b6040519081526020016100fb565b6100ef610124366004610513565b610171565b604051600681526020016100fb565b61010861014636600461054d565b610323565b6100ef6101593660046104eb565b61036b565b61010861016c36600461056d565b610448565b5f5f846001600160a01b03166009604051602001610199929190918252602082015260400190565b6040516020818303038152906040528051906020012090505f846001600160a01b031660096040516020016101d8929190918252602082015260400190565b6040516020818303038152906040528051906020012090505f866001600160a01b0316600a604051602001610217929190918252602082015260400190565b60408051601f1981840301815282825280516020918201203382850152838301819052825180850384018152606090940190925282519201919091208454845482549394509192909190888310156102b65760405162461bcd60e51b815260206004820152601b60248201527f54495032303a20696e73756666696369656e742062616c616e6365000000000060448201526064015b60405180910390fd5b888110156103065760405162461bcd60e51b815260206004820152601d60248201527f54495032303a20696e73756666696369656e7420616c6c6f77616e636500000060448201526064016102ad565b918890039095559386019092555092900390915550600192915050565b5f5f826001600160a01b0316600960405160200161034b929190918252602082015260400190565b60408051601f198184030181529190528051602090910120549392505050565b604080513360208201526009918101919091525f9081906060016040516020818303038152906040528051906020012090505f846001600160a01b031660096040516020016103c4929190918252602082015260400190565b60408051601f1981840301815291905280516020909101208254815491925090858210156104345760405162461bcd60e51b815260206004820152601b60248201527f54495032303a20696e73756666696369656e742062616c616e6365000000000060448201526064016102ad565b908590039092559201909155506001919050565b5f5f836001600160a01b0316600a604051602001610470929190918252602082015260400190565b6040516020818303038152906040528051906020012090505f836001600160a01b0316826040516020016104ae929190918252602082015260400190565b60408051601f1981840301815291905280516020909101205495945050505050565b80356001600160a01b03811681146104e6575f5ffd5b919050565b5f5f604083850312156104fc575f5ffd5b610505836104d0565b946020939093013593505050565b5f5f5f60608486031215610525575f5ffd5b61052e846104d0565b925061053c602085016104d0565b929592945050506040919091013590565b5f6020828403121561055d575f5ffd5b610566826104d0565b9392505050565b5f5f6040838503121561057e575f5ffd5b610587836104d0565b9150610595602084016104d0565b9050925092905056fea2646970667358221220fb6f212aaecc98263255bd1a430461b8c5fe0cf093450da6305e49c4ecb8265e64736f6c634300081d0033";
+
 fn get_tip20_bytecode() -> Bytes {
     hex::decode(TIP20_BYTECODE)
         .expect("Invalid TIP-20 bytecode hex")
@@ -131,6 +144,9 @@ pub struct SimulationRequest {
     pub format_trace: Option<bool>,
     /// Original transaction hash (optional, for reference)
     pub tx_hash: Option<String>,
+    /// Transaction type label (e.g. "0x76" for Tempo batch tx, "0x2" for EIP-1559)
+    #[serde(default)]
+    pub transaction_type: Option<String>,
 }
 
 /// Result of a single call in a batch transaction
@@ -175,6 +191,15 @@ pub struct SimulationResponse {
     /// Results for each call in a batch transaction (Tempo 0x76)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub call_results: Option<Vec<CallResult>>,
+    /// Whether this is a Tempo chain transaction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_tempo_tx: Option<bool>,
+    /// Fee token address (Tempo 0x76 sponsored transactions)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fee_token: Option<Address>,
+    /// Transaction type label (e.g. "batch" for 0x76, "eip1559" for 0x2)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -381,38 +406,47 @@ pub async fn run_simulation(
         )?;
     }
 
-    // For Tempo chain, inject mock TIP-20 bytecode at TIP-20 addresses
-    #[cfg(feature = "tempo")]
-    if transaction.chain_id == TEMPO_TESTNET_CHAIN_ID {
+    // For Tempo chains, inject TIP-20 ERC20 bytecode at TIP-20 precompile addresses.
+    // TIP-20 tokens have 0x20c0 address prefix and return 0xef as their on-chain code,
+    // which is not executable by standard revm. We inject proper ERC20 bytecode that
+    // reads/writes the same storage layout so simulations work correctly.
+    if is_tempo_chain(transaction.chain_id) {
         let mut tip20_addresses: Vec<Address> = Vec::new();
 
         if let Some(to) = transaction.to {
-            if tip20::is_tip20_address(&to) {
+            if is_tip20_address(&to) {
                 tip20_addresses.push(to);
             }
         }
 
         if let Some(ref calls) = transaction.calls {
             for call in calls {
-                if tip20::is_tip20_address(&call.to) {
+                if is_tip20_address(&call.to) {
                     tip20_addresses.push(call.to);
                 }
             }
         }
 
-        let tip20_bytecode = get_tip20_bytecode();
-        for address in tip20_addresses {
-            evm.override_account(
-                address,
-                None,
-                None,
-                Some(tip20_bytecode.clone()),
-                None,
-            )?;
+        if !tip20_addresses.is_empty() {
+            let tip20_bytecode = get_tip20_bytecode();
+            for address in tip20_addresses {
+                evm.override_account(
+                    address,
+                    None,
+                    None,
+                    Some(tip20_bytecode.clone()),
+                    None,
+                )?;
+            }
         }
     }
 
     let format_trace = transaction.format_trace.unwrap_or_default();
+    let is_tempo = is_tempo_chain(transaction.chain_id);
+    let is_batch = transaction.calls.is_some();
+    let tx_type = transaction.transaction_type.clone()
+        .or_else(|| if is_batch { Some("batch".to_string()) } else { None });
+    let fee_token = transaction.fee_token;
 
     // Check if this is a batch transaction (Tempo 0x76 style)
     if let Some(calls) = transaction.calls {
@@ -495,6 +529,9 @@ pub async fn run_simulation(
             exit_reason: last_exit_reason,
             return_data: last_return_data,
             call_results: Some(call_results),
+            is_tempo_tx: if is_tempo { Some(true) } else { None },
+            fee_token,
+            transaction_type: tx_type,
         });
     }
 
@@ -545,5 +582,8 @@ pub async fn run_simulation(
         formatted_trace: result.formatted_trace,
         return_data: result.return_data,
         call_results: None,
+        is_tempo_tx: if is_tempo { Some(true) } else { None },
+        fee_token,
+        transaction_type: tx_type,
     })
 }

@@ -3,7 +3,6 @@
 pub mod evm;
 pub mod simulation;
 
-#[cfg(feature = "tempo")]
 pub mod tip20;
 
 // Re-export EVM types

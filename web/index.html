@@ -167,14 +167,21 @@
                 <form id="view-form">
                     <input type="text" id="sim-id" placeholder="0x... (tx hash) or simulation ID" />
                     <select id="chain-select">
-                        <option value="1">Ethereum</option>
-                        <option value="42161">Arbitrum</option>
-                        <option value="10">Optimism</option>
-                        <option value="137">Polygon</option>
-                        <option value="8453">Base</option>
-                        <option value="56">BSC</option>
-                        <option value="43114">Avalanche</option>
-                        <option value="100">Gnosis</option>
+                        <optgroup label="Tempo">
+                            <option value="4217">Tempo Mainnet</option>
+                            <option value="42429">Tempo Testnet</option>
+                            <option value="42431">Tempo Moderato</option>
+                        </optgroup>
+                        <optgroup label="Ethereum L1/L2">
+                            <option value="1">Ethereum</option>
+                            <option value="42161">Arbitrum</option>
+                            <option value="10">Optimism</option>
+                            <option value="137">Polygon</option>
+                            <option value="8453">Base</option>
+                            <option value="56">BSC</option>
+                            <option value="43114">Avalanche</option>
+                            <option value="100">Gnosis</option>
+                        </optgroup>
                     </select>
                     <button type="submit">Inspect</button>
                 </form>

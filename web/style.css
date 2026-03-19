@@ -1352,3 +1352,64 @@ body.debug-mode .decoded-value {
     box-shadow: 0 0 16px rgba(192, 132, 252, 0.4);
     transform: translateY(-1px);
 }
+
+/* ─── Tempo chain specific styles ─────────────────────────────────────────── */
+
+/* Chain header for Tempo */
+.tempo-network {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, rgba(77,166,255,0.1), rgba(34,211,238,0.1));
+    border: 1px solid rgba(77,166,255,0.3);
+    border-radius: 8px;
+    padding: 0.25rem 0.75rem;
+}
+
+.tempo-badge {
+    font-weight: 600;
+    color: var(--accent-cyan);
+    font-size: 0.875rem;
+}
+
+/* Transaction type badges (Batch 0x76, Fee Sponsored) */
+.tx-type-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+}
+
+.tx-type-badge.batch {
+    background: rgba(77,166,255,0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(77,166,255,0.3);
+}
+
+.tx-type-badge.sponsored {
+    background: rgba(34,211,238,0.15);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(34,211,238,0.3);
+}
+
+/* TIP-20 call-type badge in trace */
+.call-type.TIP20 {
+    background: linear-gradient(135deg, rgba(77,166,255,0.2), rgba(34,211,238,0.2));
+    color: var(--accent-cyan);
+    border: 1px solid rgba(34,211,238,0.4);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+}
+
+/* TIP-20 token address highlight */
+.tip20-token {
+    color: var(--accent-cyan) !important;
+}
+
+.summary-value.tip20-token {
+    color: var(--accent-cyan);
+}

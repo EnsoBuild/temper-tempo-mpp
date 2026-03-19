@@ -21,6 +21,10 @@ const NETWORK_CHAIN_IDS: &[(&str, u64)] = &[
     ("PLUME", 98866),
     ("HYPER", 999),
     ("PLASMA", 1012),
+    // Tempo
+    ("TEMPO_MAINNET", 4217),
+    ("TEMPO_TESTNET", 42429),
+    ("TEMPO_MODERATO", 42431),
     // Testnets
     ("GOERLI", 5),
     ("SEPOLIA", 11155111),
@@ -31,7 +35,6 @@ const NETWORK_CHAIN_IDS: &[(&str, u64)] = &[
     ("ARBITRUM_GOERLI", 421613),
     ("OPTIMISM_GOERLI", 420),
     ("BASE_GOERLI", 84531),
-    ("TEMPO_TESTNET", 42429),
 ];
 
 #[derive(Debug, Clone)]

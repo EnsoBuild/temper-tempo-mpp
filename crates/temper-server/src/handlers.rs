@@ -63,6 +63,7 @@ pub async fn simulate(
             .map(|s| s == "0x1")
             .unwrap_or(true);
 
+        let is_tempo = temper_core::simulation::is_tempo_chain(transaction.chain_id);
         let mut response = SimulationResponse {
             simulation_id: 1,
             id: None,
@@ -79,6 +80,9 @@ pub async fn simulate(
             exit_reason: if success { InstructionResult::Stop } else { InstructionResult::Revert },
             return_data: Default::default(),
             call_results: None,
+            is_tempo_tx: if is_tempo { Some(true) } else { None },
+            fee_token: None,
+            transaction_type: None,
         };
 
         // Store simulation if storage is enabled

@@ -38,6 +38,20 @@
         return known ? known.inputs : null;
     }
 
+    // Tempo chain IDs
+    const TEMPO_CHAIN_IDS = new Set([4217, 42429, 42431]);
+
+    function isTempoChain(chainId) {
+        return TEMPO_CHAIN_IDS.has(chainId);
+    }
+
+    // Returns true if the address is a TIP-20 precompile (0x20c0 prefix)
+    function isTip20Address(addr) {
+        if (!addr) return false;
+        const lower = addr.toLowerCase();
+        return lower.startsWith('0x20c0');
+    }
+
     // Native token config by chain ID
     const NATIVE_TOKENS = {
         1: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png' },
@@ -47,6 +61,9 @@
         137: { symbol: 'POL', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png' },
         250: { symbol: 'FTM', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/fantom/info/logo.png' },
         999: { symbol: 'HYPE', decimals: 18, logo: null },
+        4217: { symbol: 'ETH', decimals: 18, logo: null },  // Tempo Mainnet
+        42429: { symbol: 'ETH', decimals: 18, logo: null }, // Tempo Testnet
+        42431: { symbol: 'ETH', decimals: 18, logo: null }, // Tempo Moderato
         8453: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png' },
         42161: { symbol: 'ETH', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png' },
         43114: { symbol: 'AVAX', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png' },
@@ -69,8 +86,11 @@
         137: 'Polygon',
         250: 'Fantom',
         999: 'HyperEVM',
+        4217: 'Tempo Mainnet',
         8453: 'Base',
         42161: 'Arbitrum',
+        42429: 'Tempo Testnet',
+        42431: 'Tempo Moderato',
         43114: 'Avalanche',
     };
 
@@ -248,7 +268,8 @@
         return hexData.length > 20 ? hexData.slice(0, 20) + '...' : hexData;
     }
 
-    // Block explorer API URLs by chain ID
+    // Block explorer API URLs by chain ID (Etherscan-compatible)
+    // Tempo chains use Sourcify only (no Etherscan API) - fetchFromSourcify handles them
     const EXPLORER_APIS = {
         1: 'https://api.etherscan.io/api',
         137: 'https://api.polygonscan.com/api',
@@ -260,6 +281,7 @@
         250: 'https://api.ftmscan.com/api',
         100: 'https://api.gnosisscan.io/api',
         999: 'https://www.hyperscan.com/api', // HyperEVM via Blockscout
+        // Tempo chains (4217, 42429, 42431) use Sourcify only — no Etherscan API
     };
 
     // Fetch contract info from Sourcify first, then Blockscout/Etherscan fallback
@@ -697,8 +719,18 @@
         const contractInfo = toAddr ? await fetchContractInfo(toAddr, currentChainId) : null;
         const toName = contractInfo?.name || null;
         const abiMap = contractInfo?.abi ? buildAbiFunctionMap(contractInfo.abi) : null;
+        const isTip20 = toAddr && isTip20Address(toAddr);
 
         if (toAddr) {
+            // TIP-20 precompile badge
+            if (isTip20) {
+                const tip20Badge = document.createElement('span');
+                tip20Badge.className = 'call-type TIP20';
+                tip20Badge.textContent = 'TIP-20';
+                tip20Badge.title = 'Tempo TIP-20 native token precompile';
+                content.insertBefore(tip20Badge, content.firstChild);
+            }
+
             const contractSpan = document.createElement('span');
             contractSpan.className = 'contract-name';
             contractSpan.textContent = toName || toAddr;
@@ -1327,20 +1359,45 @@
             const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
             const chainName = getChainName(currentChainId);
             const chainIcon = getChainIcon(currentChainId);
+            const isTempoTx = simulation.isTempoTx || isTempoChain(currentChainId);
+            const isBatchTx = simulation.transactionType === 'batch' || (simulation.callResults && simulation.callResults.length > 0);
+            const feeToken = simulation.feeToken;
 
             // Tenderly-style header
             const header = document.createElement('div');
             header.className = 'tenderly-header';
+
+            // Build network badge — show Tempo badge for Tempo chains
+            let networkBadgeHtml = '';
+            if (isTempoTx) {
+                networkBadgeHtml = `<div class="tenderly-network tempo-network">
+                    <span class="tempo-badge">⚡ Tempo</span>
+                    <span>${chainName}</span>
+                </div>`;
+            } else {
+                networkBadgeHtml = `<div class="tenderly-network">
+                    ${chainIcon ? `<img src="${chainIcon}" class="chain-icon" alt="${chainName}">` : ''}
+                    <span>${chainName}</span>
+                </div>`;
+            }
+
+            // Build transaction type badges
+            let txTypeBadges = '';
+            if (isBatchTx) {
+                txTypeBadges += `<span class="tx-type-badge batch">Batch (0x76)</span>`;
+            }
+            if (feeToken && isTip20Address(feeToken)) {
+                txTypeBadges += `<span class="tx-type-badge sponsored">Fee Sponsored</span>`;
+            }
+
             header.innerHTML = `
                 <div class="tenderly-header-top">
                     <div class="tenderly-title">
                         <span class="tenderly-sim-label">Simulation</span>
                         <span class="tenderly-sim-id">${simulationId}</span>
+                        ${txTypeBadges}
                     </div>
-                    <div class="tenderly-network">
-                        ${chainIcon ? `<img src="${chainIcon}" class="chain-icon" alt="${chainName}">` : ''}
-                        <span>${chainName}</span>
-                    </div>
+                    ${networkBadgeHtml}
                 </div>
             `;
             app.appendChild(header);
@@ -1394,6 +1451,25 @@
                 `;
             }
 
+            // Fee token row for Tempo sponsored transactions
+            const feeTokenRow = feeToken ? `
+                <div class="summary-row">
+                    <span class="summary-label">Fee Token</span>
+                    <span class="summary-value address${isTip20Address(feeToken) ? ' tip20-token' : ''}" title="${feeToken}">
+                        ${isTip20Address(feeToken) ? '⚡ ' : ''}${feeToken.slice(0, 10)}...${feeToken.slice(-6)}
+                    </span>
+                    ${createCopyIcon(feeToken).outerHTML}
+                </div>
+            ` : '';
+
+            // Batch call summary for 0x76 transactions
+            const batchSummary = isBatchTx && simulation.callResults ? `
+                <div class="summary-row">
+                    <span class="summary-label">Batch Calls</span>
+                    <span class="summary-value">${simulation.callResults.length} calls (${simulation.callResults.filter(r => r.success).length} succeeded)</span>
+                </div>
+            ` : '';
+
             summaryCard.innerHTML = `
                 <div class="summary-grid">
                     <div class="summary-left">
@@ -1408,10 +1484,12 @@
                         </div>
                         <div class="summary-row">
                             <span class="summary-label">Interacted With</span>
-                            <span class="summary-value address">${trace?.to || 'Contract Creation'}</span>
-                            ${trace?.to ? createCopyIcon(trace.to).outerHTML : ''}
+                            <span class="summary-value address${isBatchTx ? '' : (trace?.to && isTip20Address(trace.to) ? ' tip20-token' : '')}">${isBatchTx ? 'Batch Transaction' : (trace?.to || 'Contract Creation')}</span>
+                            ${!isBatchTx && trace?.to ? createCopyIcon(trace.to).outerHTML : ''}
                         </div>
                         ${functionDisplay}
+                        ${feeTokenRow}
+                        ${batchSummary}
                     </div>
                     <div class="summary-right">
                         <div class="summary-row">

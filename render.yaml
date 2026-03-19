@@ -27,6 +27,12 @@ services:
         sync: false
       - key: RPC_URL_HYPER
         sync: false
+      - key: RPC_URL_TEMPO_MAINNET
+        sync: false
+      - key: RPC_URL_TEMPO_TESTNET
+        sync: false
+      - key: RPC_URL_TEMPO_MODERATO
+        sync: false
     disk:
       name: temper-data
       mountPath: /data
