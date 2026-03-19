@@ -939,9 +939,15 @@
 
         console.log('Calls:', callTrace.map(c => ({ to: c.to, selector: c.selector, depth: c.depth })));
 
-        // Helper to check if address is a precompiled contract (first 256 addresses)
+        // Helper to check if address is a standard EVM precompile (first 256 addresses).
+        // On Tempo chains, 0x0000... is the batch dispatcher — always fetch source for it.
+        const TEMPO_CHAIN_IDS = new Set([4217, 42429, 42431]);
         const isPrecompile = (addr) => {
             if (!addr) return false;
+            // On Tempo, the zero address is the batch dispatcher — not a precompile
+            if (TEMPO_CHAIN_IDS.has(chainId) && /^0x0+$/i.test(addr)) return false;
+            // TIP-20 addresses (0x20c0...) need source too
+            if (addr.toLowerCase().startsWith('0x20c0')) return false;
             const addrNum = parseInt(addr.slice(2), 16);
             return addrNum < 256;
         };

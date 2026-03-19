@@ -38,16 +38,3 @@ services:
       mountPath: /data
       sizeGB: 1
 
-  # Documentation site (static) - OPTIONAL
-  # Alternative: Use Mintlify hosting (free) at mintlify.com
-  # Just connect your GitHub repo and it auto-deploys
-  - type: web
-    name: temper-docs
-    env: static
-    buildCommand: cd docs && npx mintlify build
-    staticPublishPath: docs/.mintlify/output
-    pullRequestPreviewsEnabled: true
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=3600

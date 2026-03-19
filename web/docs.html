@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Temper Docs</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body { display: flex; flex-direction: column; min-height: 100vh; }
+
+        /* ── Top nav ── */
+        .docs-topnav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            height: 56px;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .docs-topnav .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .docs-topnav .brand-icon {
+            width: 28px; height: 28px;
+            background: var(--accent-blue);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            color: #000; font-weight: 700; font-size: 0.85rem;
+        }
+        .docs-topnav nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            margin-left: 1.5rem;
+            transition: color 0.15s;
+        }
+        .docs-topnav nav a:hover { color: var(--text-primary); }
+
+        /* ── Layout ── */
+        .docs-layout {
+            display: flex;
+            flex: 1;
+            max-width: 1300px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 0 1rem;
+        }
+
+        /* ── Sidebar ── */
+        .docs-sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            padding: 2rem 1rem 2rem 0;
+            position: sticky;
+            top: 56px;
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+        }
+        .sidebar-section {
+            margin-bottom: 1.75rem;
+        }
+        .sidebar-section-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            padding: 0 0.5rem;
+            margin-bottom: 0.4rem;
+        }
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.5rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+        }
+        .sidebar-link:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .sidebar-link.active { background: var(--bg-secondary); color: var(--accent-blue); font-weight: 500; }
+        .sidebar-method {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: 'IBM Plex Mono', monospace;
+            flex-shrink: 0;
+        }
+        .method-post { background: #1a3a1a; color: #4ade80; }
+        .method-get  { background: #1a2a3a; color: #60a5fa; }
+        .method-del  { background: #3a1a1a; color: #f87171; }
+
+        /* ── Content ── */
+        .docs-content {
+            flex: 1;
+            min-width: 0;
+            padding: 2.5rem 2rem 4rem 2.5rem;
+            border-left: 1px solid var(--border-color);
+        }
+
+        /* ── Sections ── */
+        .doc-section { display: none; }
+        .doc-section.active { display: block; }
+
+        /* ── Typography ── */
+        .docs-content h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        .docs-content .lead {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        .docs-content h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 2.5rem 0 1rem;
+            color: var(--text-primary);
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .docs-content h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 1.75rem 0 0.75rem;
+            color: var(--text-primary);
+        }
+        .docs-content p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin-bottom: 1rem;
+        }
+        .docs-content ul, .docs-content ol {
+            color: var(--text-secondary);
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            line-height: 1.8;
+        }
+        .docs-content li { margin-bottom: 0.25rem; }
+
+        /* ── Code ── */
+        .docs-content code {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.82em;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: var(--accent-cyan);
+        }
+        pre {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+        pre code {
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: inherit;
+            color: inherit;
+        }
+
+        /* ── Code tabs ── */
+        .code-tabs { margin: 1rem 0; }
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 0;
+        }
+        .tab-btn {
+            padding: 0.4rem 1rem;
+            font-size: 0.8rem;
+            font-family: 'IBM Plex Mono', monospace;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+            margin-bottom: -1px;
+        }
+        .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+        .tab-btn:hover:not(.active) { color: var(--text-secondary); }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .tab-pane pre { border-top-left-radius: 0; border-top: none; margin-top: 0; }
+
+        /* ── Endpoint badge ── */
+        .endpoint {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin: 1rem 0;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.875rem;
+        }
+        .endpoint .badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .badge-post { background: #1a3a1a; color: #4ade80; }
+        .badge-get  { background: #1a2a3a; color: #60a5fa; }
+        .badge-del  { background: #3a1a1a; color: #f87171; }
+        .endpoint .path { color: var(--text-primary); }
+
+        /* ── Param table ── */
+        .param-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+        .param-table th {
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .param-table td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            vertical-align: top;
+        }
+        .param-table tr:last-child td { border-bottom: none; }
+        .param-table td:first-child { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--accent-cyan); white-space: nowrap; }
+        .param-table .type-badge {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+        .param-table .required-badge {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: #f87171;
+            margin-left: 4px;
+        }
+
+        /* ── Callout ── */
+        .callout {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin: 1rem 0;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .callout.warning { border-left-color: #f59e0b; }
+        .callout strong { color: var(--text-primary); }
+
+        /* ── Feature grid ── */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        .feature-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+        .feature-card h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.4rem;
+        }
+        .feature-card p {
+            font-size: 0.825rem;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        /* ── Chain table ── */
+        .chain-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; margin: 1rem 0; }
+        .chain-table th {
+            text-align: left;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .chain-table td {
+            padding: 0.55rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+        .chain-table tr:last-child td { border-bottom: none; }
+        .chain-table td:nth-child(2) { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; }
+        .dot-green { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; margin-right: 6px; }
+        .tempo-row td { color: var(--accent-cyan); }
+
+        /* ── Tempo badge ── */
+        .tip20-badge {
+            display: inline-block;
+            background: #0a2a3a;
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 1px 7px;
+            border-radius: 10px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        @media (max-width: 768px) {
+            .docs-sidebar { display: none; }
+            .docs-content { border-left: none; padding: 1.5rem 1rem; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top nav -->
+<header class="docs-topnav">
+    <a href="/" class="brand">
+        <div class="brand-icon">T</div>
+        <span>Temper</span>
+        <span style="color:var(--text-muted);font-weight:400;font-size:0.8rem;margin-left:0.25rem">/ docs</span>
+    </a>
+    <nav>
+        <a href="/">Home</a>
+        <a href="https://github.com/milonite/temper-test" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+</header>
+
+<div class="docs-layout">
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Getting Started</div>
+            <a class="sidebar-link active" data-section="introduction">Introduction</a>
+            <a class="sidebar-link" data-section="quickstart">Quick Start</a>
+            <a class="sidebar-link" data-section="chains">Supported Chains</a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">API Reference</div>
+            <a class="sidebar-link" data-section="simulate">
+                <span class="sidebar-method method-post">POST</span>/simulate
+            </a>
+            <a class="sidebar-link" data-section="simulate-bundle">
+                <span class="sidebar-method method-post">POST</span>/simulate-bundle
+            </a>
+            <a class="sidebar-link" data-section="simulate-stateful">
+                <span class="sidebar-method method-post">POST</span>/simulate-stateful
+            </a>
+            <a class="sidebar-link" data-section="get-simulation">
+                <span class="sidebar-method method-get">GET</span>/simulation/{id}
+            </a>
+            <a class="sidebar-link" data-section="debug">
+                <span class="sidebar-method method-post">POST</span>/debug
+            </a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Guides</div>
+            <a class="sidebar-link" data-section="state-overrides">State Overrides</a>
+            <a class="sidebar-link" data-section="tempo">Tempo & TIP-20 ⚡</a>
+        </div>
+    </aside>
+
+    <!-- Content -->
+    <main class="docs-content">
+
+        <!-- ── Introduction ── -->
+        <section class="doc-section active" id="s-introduction">
+            <h1>Temper</h1>
+            <p class="lead">High-performance EVM transaction simulator. Preview outcomes, inspect traces, and debug failures — without spending gas.</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>⚡ Fast Simulations</h4>
+                    <p>Simulate transactions in milliseconds with an optimized Rust backend forking from live chain state.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🔍 Visual Debugger</h4>
+                    <p>Step through execution with source code highlighting, decoded parameters, and call stack visualization.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🌐 Multi-Chain</h4>
+                    <p>Ethereum, Polygon, Arbitrum, Base, Optimism, BSC, Tempo and more — all from one API.</p>
+                </div>
+                <div class="feature-card">
+                    <h4>🛠 State Overrides</h4>
+                    <p>Test with custom balances, storage slots, and contract bytecode before anything hits the chain.</p>
+                </div>
+            </div>
+
+            <h2>Base URL</h2>
+            <pre><code>https://temper-api.onrender.com/api/v1</code></pre>
+
+            <h2>Authentication</h2>
+            <p>When an <code>API_KEY</code> is configured on the server, include it in every request:</p>
+            <pre><code>X-API-KEY: your-api-key</code></pre>
+
+            <h2>Response Format</h2>
+            <p>All endpoints return JSON. Field names are <code>camelCase</code>. Hex values use the <code>0x</code> prefix.</p>
+        </section>
+
+        <!-- ── Quick Start ── -->
+        <section class="doc-section" id="s-quickstart">
+            <h1>Quick Start</h1>
+            <p class="lead">Simulate your first transaction in under a minute.</p>
+
+            <h2>1. Simulate a Token Transfer</h2>
+            <p>Simulate a USDC transfer on Ethereum:</p>
+
+            <div class="code-tabs">
+                <div class="tab-bar">
+                    <button class="tab-btn active" data-tab="curl">cURL</button>
+                    <button class="tab-btn" data-tab="js">JavaScript</button>
+                    <button class="tab-btn" data-tab="py">Python</button>
+                </div>
+                <div class="tab-pane active" data-tab="curl">
+<pre><code>curl -X POST https://temper-api.onrender.com/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chainId": 1,
+    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "data": "0xa9059cbb000000000000000000000000d8da6bf26964af9d7eed9e03e53415d37aa960450000000000000000000000000000000000000000000000000000000005f5e100",
+    "gasLimit": "0x100000",
+    "value": "0x0"
+  }'</code></pre>
+                </div>
+                <div class="tab-pane" data-tab="js">
+<pre><code>const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+const sender = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
+
+const data = '0xa9059cbb'
+  + sender.slice(2).padStart(64, '0')
+  + (100_000_000).toString(16).padStart(64, '0');  // 100 USDC
+
+const result = await fetch('https://temper-api.onrender.com/api/v1/simulate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chainId: 1,
+    from: sender,
+    to: USDC,
+    data,
+    gasLimit: '0x100000',
+    value: '0x0'
+  })
+}).then(r => r.json());
+
+console.log('Success:', result.success);
+console.log('Gas used:', result.gasUsed);
+console.log('View:', result.simulationUrl);</code></pre>
+                </div>
+                <div class="tab-pane" data-tab="py">
+<pre><code>import requests
+
+USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+sender = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+
+data = '0xa9059cbb' + sender[2:].zfill(64) + hex(100_000_000)[2:].zfill(64)
+
+result = requests.post(
+    'https://temper-api.onrender.com/api/v1/simulate',
+    json={
+        'chainId': 1,
+        'from': sender,
+        'to': USDC,
+        'data': data,
+        'gasLimit': '0x100000',
+        'value': '0x0'
+    }
+).json()
+
+print('Success:', result['success'])
+print('View:', result['simulationUrl'])</code></pre>
+                </div>
+            </div>
+
+            <h2>2. Inspect the Response</h2>
+<pre><code>{
+  "id": "mHmgzXD28j18r8pnMDota",
+  "simulationUrl": "https://temper-api.onrender.com/simulation/mHmgzXD28j18r8pnMDota",
+  "chainId": 1,
+  "success": true,
+  "gasUsed": 51234,
+  "blockNumber": 19234567,
+  "returnData": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "exitReason": "Stop",
+  "logs": [ { "address": "0xa0b8...", "topics": ["0xddf2..."], "data": "0x..." } ],
+  "enhancedTrace": { "type": "CALL", "from": "0xd8da...", "calls": [] }
+}</code></pre>
+
+            <h2>3. View in Browser</h2>
+            <p>Every simulation gets a shareable <code>simulationUrl</code>. Open it to see the full trace, decoded calls, token transfers, and more. Click <strong>Open Debugger</strong> from any simulation page for step-by-step source navigation.</p>
+
+            <h2>4. Test with State Overrides</h2>
+            <p>Give any address a custom balance or storage state before simulating:</p>
+<pre><code>{
+  "chainId": 1,
+  "from": "0x0000000000000000000000000000000000000001",
+  "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "data": "0xa9059cbb...",
+  "gasLimit": "0x100000",
+  "value": "0x0",
+  "stateOverrides": {
+    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
+      "state": {
+        "stateDiff": {
+          "0x&lt;balance_slot&gt;": "0x0000000000000000000000000000000000000000000000000000000005f5e100"
+        }
+      }
+    }
+  }
+}</code></pre>
+        </section>
+
+        <!-- ── Supported Chains ── -->
+        <section class="doc-section" id="s-chains">
+            <h1>Supported Chains</h1>
+            <p class="lead">Configure RPC URLs via environment variables — any chain with a compatible JSON-RPC node works.</p>
+
+            <h2>Tempo Chains</h2>
+            <table class="chain-table">
+                <thead><tr><th>Network</th><th>Chain ID</th><th>Env Var</th></tr></thead>
+                <tbody>
+                    <tr class="tempo-row"><td>⚡ Tempo Mainnet</td><td>4217</td><td><code>RPC_URL_TEMPO_MAINNET</code></td></tr>
+                    <tr class="tempo-row"><td>⚡ Tempo Testnet</td><td>42429</td><td><code>RPC_URL_TEMPO_TESTNET</code></td></tr>
+                    <tr class="tempo-row"><td>⚡ Tempo Moderato</td><td>42431</td><td><code>RPC_URL_TEMPO_MODERATO</code></td></tr>
+                </tbody>
+            </table>
+
+            <h2>EVM Mainnets</h2>
+            <table class="chain-table">
+                <thead><tr><th>Network</th><th>Chain ID</th><th>Env Var</th></tr></thead>
+                <tbody>
+                    <tr><td><span class="dot-green"></span>Ethereum</td><td>1</td><td><code>RPC_URL_ETHEREUM</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Arbitrum One</td><td>42161</td><td><code>RPC_URL_ARBITRUM</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Optimism</td><td>10</td><td><code>RPC_URL_OPTIMISM</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Base</td><td>8453</td><td><code>RPC_URL_BASE</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Polygon</td><td>137</td><td><code>RPC_URL_POLYGON</code></td></tr>
+                    <tr><td><span class="dot-green"></span>BSC</td><td>56</td><td><code>RPC_URL_BSC</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Gnosis</td><td>100</td><td><code>RPC_URL_GNOSIS</code></td></tr>
+                    <tr><td><span class="dot-green"></span>Avalanche</td><td>43114</td><td><code>RPC_URL_AVALANCHE</code></td></tr>
+                    <tr><td><span class="dot-green"></span>HyperEVM</td><td>999</td><td><code>RPC_URL_HYPER</code></td></tr>
+                </tbody>
+            </table>
+
+            <div class="callout">
+                <strong>Archive node required</strong> for <code>debug_traceTransaction</code> and historical block simulation. Alchemy Growth+ or QuickNode Build+ recommended.
+            </div>
+        </section>
+
+        <!-- ── POST /simulate ── -->
+        <section class="doc-section" id="s-simulate">
+            <h1>Simulate Transaction</h1>
+            <p class="lead">Simulate a single EVM transaction and get execution results, gas usage, logs, and a shareable trace URL.</p>
+
+            <div class="endpoint">
+                <span class="badge badge-post">POST</span>
+                <span class="path">/api/v1/simulate</span>
+            </div>
+
+            <h2>Request Parameters</h2>
+            <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>chainId<span class="required-badge">*</span></td><td><span class="type-badge">number</span></td><td>Chain ID (e.g. 1 for Ethereum, 4217 for Tempo)</td></tr>
+                    <tr><td>from<span class="required-badge">*</span></td><td><span class="type-badge">address</span></td><td>Sender address (0x-prefixed)</td></tr>
+                    <tr><td>to</td><td><span class="type-badge">address</span></td><td>Target contract address. Omit for contract deployment.</td></tr>
+                    <tr><td>data</td><td><span class="type-badge">hex</span></td><td>Calldata — function selector + ABI-encoded arguments</td></tr>
+                    <tr><td>value</td><td><span class="type-badge">hex</span></td><td>ETH value in wei (e.g. <code>"0x0"</code>)</td></tr>
+                    <tr><td>gasLimit<span class="required-badge">*</span></td><td><span class="type-badge">hex</span></td><td>Maximum gas (e.g. <code>"0x100000"</code>)</td></tr>
+                    <tr><td>blockNumber</td><td><span class="type-badge">number</span></td><td>Simulate at a specific block. Defaults to latest.</td></tr>
+                    <tr><td>blockTimestamp</td><td><span class="type-badge">hex</span></td><td>Override block timestamp</td></tr>
+                    <tr><td>stateOverrides</td><td><span class="type-badge">object</span></td><td>Per-address state overrides. See <a href="#" data-section="state-overrides">State Overrides</a>.</td></tr>
+                    <tr><td>formatTrace</td><td><span class="type-badge">boolean</span></td><td>Return a human-readable trace string</td></tr>
+                    <tr><td>txHash</td><td><span class="type-badge">string</span></td><td>Fetch and store a real on-chain tx trace instead of simulating</td></tr>
+                    <tr><td>calls</td><td><span class="type-badge">array</span></td><td>Batch calls for Tempo type 0x76 transactions</td></tr>
+                    <tr><td>feeToken</td><td><span class="type-badge">address</span></td><td>TIP-20 token used for gas fees (Tempo only)</td></tr>
+                    <tr><td>feePayer</td><td><span class="type-badge">address</span></td><td>Sponsor address for fee-delegated transactions (Tempo only)</td></tr>
+                    <tr><td>transactionType</td><td><span class="type-badge">string</span></td><td>Set to <code>"batch"</code> for Tempo 0x76 batch transactions</td></tr>
+                </tbody>
+            </table>
+
+            <h2>Response Fields</h2>
+            <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>id</td><td><span class="type-badge">string</span></td><td>Unique simulation ID (nanoid)</td></tr>
+                    <tr><td>simulationUrl</td><td><span class="type-badge">string</span></td><td>Shareable URL to view the simulation</td></tr>
+                    <tr><td>success</td><td><span class="type-badge">boolean</span></td><td>Whether the transaction succeeded</td></tr>
+                    <tr><td>gasUsed</td><td><span class="type-badge">number</span></td><td>Gas consumed</td></tr>
+                    <tr><td>blockNumber</td><td><span class="type-badge">number</span></td><td>Block the simulation was run at</td></tr>
+                    <tr><td>returnData</td><td><span class="type-badge">hex</span></td><td>Raw return data</td></tr>
+                    <tr><td>exitReason</td><td><span class="type-badge">string</span></td><td><code>Stop</code>, <code>Revert</code>, <code>OutOfGas</code>, etc.</td></tr>
+                    <tr><td>logs</td><td><span class="type-badge">array</span></td><td>Event logs emitted during execution</td></tr>
+                    <tr><td>enhancedTrace</td><td><span class="type-badge">object</span></td><td>Full call trace tree with nested subcalls</td></tr>
+                    <tr><td>isTempoTx</td><td><span class="type-badge">boolean</span></td><td>Whether this is a Tempo chain transaction</td></tr>
+                    <tr><td>transactionType</td><td><span class="type-badge">string</span></td><td><code>"batch"</code> for 0x76 transactions</td></tr>
+                    <tr><td>feeToken</td><td><span class="type-badge">address</span></td><td>Fee token address (Tempo batch txs)</td></tr>
+                    <tr><td>callResults</td><td><span class="type-badge">array</span></td><td>Per-call results for batch transactions</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ── POST /simulate-bundle ── -->
+        <section class="doc-section" id="s-simulate-bundle">
+            <h1>Simulate Bundle</h1>
+            <p class="lead">Simulate an ordered sequence of transactions sharing a single forked EVM. State from each transaction is visible to the next.</p>
+
+            <div class="endpoint">
+                <span class="badge badge-post">POST</span>
+                <span class="path">/api/v1/simulate-bundle</span>
+            </div>
+
+            <p>The request body is an array of <a href="#" data-section="simulate">simulation requests</a>. All transactions must share the same <code>chainId</code>. Returns an array of simulation responses.</p>
+
+            <div class="callout">
+                <strong>One EVM fork</strong> — all transactions share a single forked state. The first transaction's <code>blockNumber</code> sets the fork point for the entire bundle.
+            </div>
+
+            <h2>Example: Approve + Swap</h2>
+            <div class="code-tabs">
+                <div class="tab-bar">
+                    <button class="tab-btn active" data-tab="curl">cURL</button>
+                    <button class="tab-btn" data-tab="js">JavaScript</button>
+                </div>
+                <div class="tab-pane active" data-tab="curl">
+<pre><code>curl -X POST https://temper-api.onrender.com/api/v1/simulate-bundle \
+  -H "Content-Type: application/json" \
+  -d '[
+    {
+      "chainId": 1,
+      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "to": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+      "data": "0x095ea7b3000000000000000000000000def1c0ded9bec7f1a1670819833240f027b25eff0000000000000000000000000000000000000000000000000000000005f5e100",
+      "gasLimit": "0x100000",
+      "value": "0x0"
+    },
+    {
+      "chainId": 1,
+      "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      "to": "0xdef1c0ded9bec7f1a1670819833240f027b25eff",
+      "data": "0x...",
+      "gasLimit": "0x200000",
+      "value": "0x0"
+    }
+  ]'</code></pre>
+                </div>
+                <div class="tab-pane" data-tab="js">
+<pre><code>const results = await fetch('https://temper-api.onrender.com/api/v1/simulate-bundle', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([
+    { chainId: 1, from, to: USDC, data: encodeApprove(ROUTER, amount), gasLimit: '0x100000', value: '0x0' },
+    { chainId: 1, from, to: ROUTER, data: encodeSwap(...), gasLimit: '0x200000', value: '0x0' }
+  ])
+}).then(r => r.json());
+
+const totalGas = results.reduce((s, r) => s + r.gasUsed, 0);
+console.log(`Both succeeded: ${results.every(r => r.success)}`);
+console.log(`Total gas: ${totalGas}`);</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Stateful ── -->
+        <section class="doc-section" id="s-simulate-stateful">
+            <h1>Stateful Simulation</h1>
+            <p class="lead">Create a persistent forked EVM session. Execute multiple independent API calls against the same state — perfect for interactive testing.</p>
+
+            <h2>Workflow</h2>
+            <ol>
+                <li>Create a session → get a <code>statefulSimulationId</code></li>
+                <li>POST transactions to the session ID (state persists between calls)</li>
+                <li>DELETE the session when done</li>
+            </ol>
+
+            <h2>Create Session</h2>
+            <div class="endpoint"><span class="badge badge-post">POST</span><span class="path">/api/v1/simulate-stateful</span></div>
+<pre><code>// Request
+{ "chainId": 1, "gasLimit": "0x1000000", "blockNumber": 19234567 }
+
+// Response
+{ "statefulSimulationId": "550e8400-e29b-41d4-a716-446655440000" }</code></pre>
+
+            <h2>Execute Transactions</h2>
+            <div class="endpoint"><span class="badge badge-post">POST</span><span class="path">/api/v1/simulate-stateful/{id}</span></div>
+            <p>Body is an array of simulation requests. Returns an array of simulation responses. State from previous calls is preserved.</p>
+
+            <h2>End Session</h2>
+            <div class="endpoint"><span class="badge badge-del">DELETE</span><span class="path">/api/v1/simulate-stateful/{id}</span></div>
+            <p>Frees the in-memory EVM. Always call this when done.</p>
+
+            <h2>Full Example</h2>
+<pre><code>// 1. Create
+const { statefulSimulationId } = await fetch('/api/v1/simulate-stateful', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ chainId: 1, gasLimit: '0x1000000' })
+}).then(r => r.json());
+
+// 2. Approve
+const [approve] = await fetch(`/api/v1/simulate-stateful/${statefulSimulationId}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([{ chainId: 1, from, to: USDC, data: encodeApprove(ROUTER, MAX), gasLimit: '0x100000', value: '0x0' }])
+}).then(r => r.json());
+
+// 3. Swap — sees the approval from step 2
+const [swap] = await fetch(`/api/v1/simulate-stateful/${statefulSimulationId}`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify([{ chainId: 1, from, to: ROUTER, data: encodeSwap(...), gasLimit: '0x200000', value: '0x0' }])
+}).then(r => r.json());
+
+// 4. Clean up
+await fetch(`/api/v1/simulate-stateful/${statefulSimulationId}`, { method: 'DELETE' });</code></pre>
+        </section>
+
+        <!-- ── GET /simulation ── -->
+        <section class="doc-section" id="s-get-simulation">
+            <h1>Retrieve Simulation</h1>
+            <p class="lead">Fetch stored simulation results by ID. Simulations are stored when a database is configured.</p>
+
+            <div class="endpoint"><span class="badge badge-get">GET</span><span class="path">/api/v1/simulation/{id}</span></div>
+            <p>Returns the full simulation response including trace, logs, and metadata.</p>
+
+            <div class="endpoint"><span class="badge badge-get">GET</span><span class="path">/api/v1/simulation/{id}/trace</span></div>
+            <p>Returns only the enhanced call trace tree. Lighter payload for trace-only use cases.</p>
+
+            <div class="endpoint"><span class="badge badge-get">GET</span><span class="path">/api/v1/simulation/{id}/debug</span></div>
+            <p>Returns the step-by-step debug trace (requires the simulation to have a <code>txHash</code>).</p>
+
+            <h2>Web Viewer</h2>
+            <p>Every simulation with storage enabled gets a shareable viewer page:</p>
+            <pre><code>https://temper-api.onrender.com/simulation/{id}</code></pre>
+            <p>Shows transaction overview, call trace, decoded events, token transfers, and links to the debugger.</p>
+        </section>
+
+        <!-- ── Debug ── -->
+        <section class="doc-section" id="s-debug">
+            <h1>Debug Trace</h1>
+            <p class="lead">Fetch a step-by-step execution trace for a transaction using <code>debug_traceTransaction</code> (callTracer).</p>
+
+            <div class="endpoint"><span class="badge badge-post">POST</span><span class="path">/api/v1/debug</span></div>
+
+            <h2>Request</h2>
+<pre><code>{
+  "txHash": "0x97853001b7c7974d556953bc27af6a0b3d6931d313df6340a150e978754990f9",
+  "chainId": 4217
+}</code></pre>
+
+            <h2>Response</h2>
+            <p>Returns a <code>DebugTrace</code> with the full call tree. Used by the in-browser step debugger.</p>
+<pre><code>{
+  "gas": 300532,
+  "failed": false,
+  "returnValue": "0x",
+  "structLogs": [],
+  "callTree": {
+    "type": "CALL",
+    "from": "0x0000000000000000000000000000000000000000",
+    "to": "0x0000000000000000000000000000000000000000",
+    "calls": [
+      {
+        "type": "CALL",
+        "from": "0x980a...",
+        "to": "0x20c0...",
+        "input": "0x23b872dd...",
+        "output": "0x0000...0001",
+        "gasUsed": "0x44034"
+      }
+    ]
+  }
+}</code></pre>
+
+            <h2>Contract Source</h2>
+            <div class="endpoint"><span class="badge badge-get">GET</span><span class="path">/api/v1/contract/{chainId}/{address}/source</span></div>
+            <p>Returns verified Solidity source for a contract. Tries (in order):</p>
+            <ol>
+                <li>TIP-20 hardcoded interface (for <code>0x20c0...</code> addresses on Tempo)</li>
+                <li>Tempo Batch Dispatcher description (for <code>0x0000...</code> on Tempo)</li>
+                <li><code>contracts.tempo.xyz</code> — Tempo's Sourcify instance (Tempo chains only)</li>
+                <li>Etherscan V2 API (Ethereum, Arbitrum, Base, Optimism, Polygon, BSC)</li>
+                <li>Public Sourcify (<code>sourcify.dev/server</code>) — all chains</li>
+            </ol>
+        </section>
+
+        <!-- ── State Overrides ── -->
+        <section class="doc-section" id="s-state-overrides">
+            <h1>State Overrides</h1>
+            <p class="lead">Override the on-chain state of any address before simulation runs. Useful for testing without needing real balances or deploying contracts.</p>
+
+            <h2>Schema</h2>
+            <p>The <code>stateOverrides</code> field is a map of <code>address → override</code>:</p>
+<pre><code>"stateOverrides": {
+  "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": {
+    "balance": "0xde0b6b3a7640000",
+    "nonce": 5,
+    "code": "0x608060...",
+    "state": {
+      "stateDiff": {
+        "0x&lt;slot&gt;": "0x&lt;value&gt;"
+      }
+    }
+  }
+}</code></pre>
+
+            <h2>Override Fields</h2>
+            <table class="param-table">
+                <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+                <tbody>
+                    <tr><td>balance</td><td><span class="type-badge">hex</span></td><td>Set ETH balance in wei</td></tr>
+                    <tr><td>nonce</td><td><span class="type-badge">number</span></td><td>Set account nonce</td></tr>
+                    <tr><td>code</td><td><span class="type-badge">hex</span></td><td>Replace deployed bytecode</td></tr>
+                    <tr><td>state.stateDiff</td><td><span class="type-badge">object</span></td><td>Set specific storage slots (others unchanged)</td></tr>
+                    <tr><td>state.state</td><td><span class="type-badge">object</span></td><td>Replace entire storage (clears all other slots)</td></tr>
+                </tbody>
+            </table>
+
+            <h2>Example: Custom Token Balance</h2>
+            <p>Compute the ERC-20 <code>balanceOf</code> storage slot and override it:</p>
+<pre><code>// ERC-20 balances mapping is at slot 9 (standard layout)
+// slot = keccak256(abi.encode(address, uint256(9)))
+import { keccak256, encodeAbiParameters } from 'viem';
+
+const balanceSlot = keccak256(encodeAbiParameters(
+  [{ type: 'address' }, { type: 'uint256' }],
+  [senderAddress, 9n]
+));
+
+const body = {
+  chainId: 1,
+  from: sender,
+  to: USDC,
+  data: encodeTransfer(recipient, 1_000_000n),
+  gasLimit: '0x100000',
+  value: '0x0',
+  stateOverrides: {
+    [USDC]: {
+      state: {
+        stateDiff: {
+          [balanceSlot]: '0x' + (10_000_000n).toString(16).padStart(64, '0')
+        }
+      }
+    }
+  }
+};</code></pre>
+
+            <div class="callout warning">
+                <strong>TIP-20 storage layout</strong> differs from standard ERC-20. Slot 9 = balances, but the key encoding uses <code>keccak256(address || uint256(9))</code> — same Solidity mapping layout, same slot number.
+            </div>
+        </section>
+
+        <!-- ── Tempo ── -->
+        <section class="doc-section" id="s-tempo">
+            <h1>Tempo & TIP-20 <span class="tip20-badge">⚡ Tempo</span></h1>
+            <p class="lead">Temper has native support for Tempo's transaction model including TIP-20 token precompiles and type 0x76 batch transactions.</p>
+
+            <h2>Tempo Chains</h2>
+            <table class="chain-table">
+                <thead><tr><th>Network</th><th>Chain ID</th></tr></thead>
+                <tbody>
+                    <tr class="tempo-row"><td>Tempo Mainnet</td><td>4217</td></tr>
+                    <tr class="tempo-row"><td>Tempo Testnet</td><td>42429</td></tr>
+                    <tr class="tempo-row"><td>Tempo Moderato</td><td>42431</td></tr>
+                </tbody>
+            </table>
+
+            <h2>TIP-20 Native Tokens</h2>
+            <p>TIP-20 tokens are Tempo's native token standard. Their contract addresses all start with <code>0x20c0</code>. They implement the full ERC-20 interface but are handled at the protocol level — not as deployed EVM bytecode.</p>
+
+            <ul>
+                <li>Always 6 decimals</li>
+                <li>Standard ERC-20 function selectors (<code>transfer</code>, <code>approve</code>, <code>transferFrom</code>, etc.)</li>
+                <li>Storage layout: slot 8 = totalSupply, slot 9 = balances, slot 10 = allowances</li>
+                <li>Temper automatically injects a compatible ERC-20 bytecode at these addresses so simulations work correctly</li>
+            </ul>
+
+            <h2>Type 0x76 Batch Transactions</h2>
+            <p>Tempo's native batch transaction type. Multiple calls execute atomically in one transaction, with optional fee sponsorship via a TIP-20 token.</p>
+
+<pre><code>{
+  "chainId": 4217,
+  "from": "0x60d770...",
+  "gasLimit": "0xf4240",
+  "transactionType": "batch",
+  "feeToken": "0x20c000000000000000000000b9537d11c60e8b50",
+  "calls": [
+    { "to": "0x20c0...", "data": "0x70a08231..." },
+    { "to": "0x20c0...", "data": "0xa9059cbb..." },
+    { "to": "0xABC...",  "data": "0x...", "value": "0x0" }
+  ]
+}</code></pre>
+
+            <h2>Batch Response</h2>
+            <p>The response includes per-call results in <code>callResults</code>:</p>
+<pre><code>{
+  "success": true,
+  "isTempoTx": true,
+  "transactionType": "batch",
+  "feeToken": "0x20c000000000000000000000b9537d11c60e8b50",
+  "gasUsed": 65847,
+  "callResults": [
+    { "success": true, "gasUsed": 21240, "returnData": "0x0000...0006" },
+    { "success": true, "gasUsed": 32000, "returnData": "0x0000...0001" },
+    { "success": true, "gasUsed": 12607, "returnData": "0x" }
+  ]
+}</code></pre>
+
+            <h2>Fetch Real On-Chain Tx</h2>
+            <p>Pass a <code>txHash</code> to fetch and store the actual trace from the chain via <code>debug_traceTransaction</code>:</p>
+<pre><code>{
+  "chainId": 4217,
+  "from": "0x0000000000000000000000000000000000000000",
+  "gasLimit": "0x7a120",
+  "txHash": "0x97853001b7c7974d556953bc27af6a0b3d6931d313df6340a150e978754990f9"
+}</code></pre>
+
+            <h2>Contract Source on Tempo</h2>
+            <p>The <code>/contract/{chainId}/{address}/source</code> endpoint resolves sources for Tempo addresses:</p>
+            <ul>
+                <li><strong>0x20c0... addresses</strong> → returns the TIP-20 interface (hardcoded, always available)</li>
+                <li><strong>0x0000... (zero address)</strong> → returns the Tempo Batch Dispatcher description</li>
+                <li><strong>Verified contracts</strong> → fetched from <code>contracts.tempo.xyz</code> (Tempo's Sourcify instance)</li>
+            </ul>
+        </section>
+
+    </main>
+</div>
+
+<script>
+    // Sidebar navigation
+    document.querySelectorAll('.sidebar-link').forEach(link => {
+        link.addEventListener('click', () => {
+            const section = link.dataset.section;
+            showSection(section);
+        });
+    });
+
+    // Inline links inside content
+    document.querySelectorAll('[data-section]').forEach(el => {
+        if (el.tagName === 'A') {
+            el.addEventListener('click', e => {
+                e.preventDefault();
+                showSection(el.dataset.section);
+            });
+        }
+    });
+
+    function showSection(id) {
+        // Update sidebar
+        document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === id));
+        // Update content
+        document.querySelectorAll('.doc-section').forEach(s => s.classList.toggle('active', s.id === 's-' + id));
+        window.scrollTo(0, 0);
+    }
+
+    // Code tabs
+    document.querySelectorAll('.code-tabs').forEach(tabs => {
+        tabs.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                tabs.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+                tabs.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.dataset.tab === tab));
+            });
+        });
+    });
+
+    // Activate section from URL hash
+    const hash = location.hash.slice(1);
+    if (hash) showSection(hash);
+</script>
+</body>
+</html>

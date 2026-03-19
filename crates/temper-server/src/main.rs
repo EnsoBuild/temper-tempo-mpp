@@ -113,6 +113,11 @@ fn web_ui_routes(
         .and(warp::any().map(move || storage.clone()))
         .and_then(serve_simulation_page);
 
+    // GET /docs - Serve documentation page
+    let docs_page = warp::path!("docs")
+        .and(warp::get())
+        .map(|| warp::reply::html(include_str!("../../../web/docs.html")));
+
     // GET /debug - Serve debugger page
     let debug_page = warp::path!("debug")
         .and(warp::get())
@@ -126,7 +131,7 @@ fn web_ui_routes(
     let root = warp::path::end()
         .map(|| warp::reply::html(include_str!("../../../web/index.html")));
 
-    simulation_page.or(debug_page).or(static_files).or(root)
+    simulation_page.or(docs_page).or(debug_page).or(static_files).or(root)
 }
 
 fn serve_debug_page() -> impl warp::Reply {
