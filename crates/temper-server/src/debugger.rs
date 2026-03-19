@@ -338,6 +338,37 @@ interface ITIP20 {
     }
 }
 
+/// Hardcoded source for the Tempo protocol batch dispatcher (zero address).
+/// In type 0x76 transactions the root call has from=0x0 and to=0x0 —
+/// this is the protocol-level batch dispatch, not a deployed contract.
+fn tempo_batch_dispatcher_source() -> ContractSource {
+    let source = r#"// Tempo Protocol — Batch Transaction Dispatcher
+//
+// The zero address (0x0000...0000) is the entry point for Tempo's
+// type 0x76 batch transactions. It is not a deployed contract —
+// it is handled natively by the Tempo execution layer.
+//
+// A type 0x76 transaction contains:
+//   - calls[]     : array of { to, value, input } sub-calls
+//   - feeToken    : TIP-20 token used to pay gas fees
+//   - feePayer    : address sponsoring the transaction fees
+//
+// Each sub-call is executed sequentially and commits state independently.
+"#;
+    let file_name = "TempoBatchDispatcher.txt".to_string();
+    let mut sources = HashMap::new();
+    sources.insert(file_name.clone(), source.to_string());
+
+    ContractSource {
+        name: "Tempo Batch Dispatcher (0x76)".to_string(),
+        sources,
+        source_list: vec![file_name],
+        abi: serde_json::Value::Array(vec![]),
+        source_map: String::new(),
+        source_locations: vec![],
+    }
+}
+
 /// Try Sourcify v2 API (used by contracts.tempo.xyz and sourcify.dev/server)
 async fn try_sourcify_v2(client: &reqwest::Client, base_url: &str, chain_id: u64, address: &str) -> Option<ContractSource> {
     let url = format!("{}/v2/contract/{}/{}?fields=all", base_url, chain_id, address);
@@ -465,10 +496,18 @@ pub async fn fetch_contract_source(
 ) -> Result<Option<ContractSource>, String> {
     let client = http_client();
 
-    // TIP-20 native precompiles (0x20c0... prefix) — return hardcoded interface directly
     let addr_lower = address.to_lowercase();
+
+    // TIP-20 native precompiles (0x20c0... prefix) — return hardcoded interface directly
     if addr_lower.starts_with("0x20c0") {
         return Ok(Some(tip20_contract_source(address)));
+    }
+
+    // Zero address on Tempo = protocol batch dispatcher (type 0x76 root call)
+    if matches!(chain_id, 4217 | 42429 | 42431)
+        && addr_lower.trim_start_matches("0x").chars().all(|c| c == '0')
+    {
+        return Ok(Some(tempo_batch_dispatcher_source()));
     }
 
     // For Tempo chains, try contracts.tempo.xyz (Sourcify v2) first
