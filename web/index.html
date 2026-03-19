@@ -3,258 +3,644 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temper - EVM Transaction Simulator</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Temper Tempo — EVM Transaction Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Newsreader:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        #app {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 3rem 2rem;
+        /* === Design System: The Kinetic Monolith === */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --surface: #f9f9f9;
+            --surface-lowest: #ffffff;
+            --surface-low: #f3f3f3;
+            --surface-container: #eeeeee;
+            --surface-high: #e8e8e8;
+            --surface-highest: #e2e2e2;
+            --inverse-surface: #0e0e0e;
+            --on-surface: #323232;
+            --on-surface-variant: #5f5f5f;
+            --outline: #7b7b7b;
+            --outline-variant: #b2b2b2;
+            --primary: #006970;
+            --primary-cyan: #00ebf9;
+            --inverse-primary: #00eefc;
+            --error: #9f403d;
+            --error-container: #fe8983;
+            --primary-container: #7df4ff;
+
+            --font-heading: 'Space Grotesk', sans-serif;
+            --font-serif: 'Newsreader', Georgia, serif;
+            --font-body: 'Inter', sans-serif;
+            --font-mono: 'IBM Plex Mono', monospace;
         }
-        header {
-            text-align: center;
-            margin-bottom: 3rem;
-            border-bottom: none;
+
+        body {
+            font-family: var(--font-body);
+            background: var(--surface);
+            color: var(--on-surface);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
-        header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .subtitle {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-        }
-        .intro {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-        }
-        .intro h2 {
-            margin-bottom: 1rem;
-            font-size: 1.5rem;
-        }
-        .intro p {
-            color: var(--text-secondary);
-            margin-bottom: 1.5rem;
-        }
-        .api-info {
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            padding: 1.5rem;
-        }
-        .api-info h3 {
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-        }
-        .api-info ul {
-            list-style: none;
-        }
-        .api-info li {
-            padding: 0.5rem 0;
-            font-family: 'IBM Plex Mono', monospace;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-        .api-info code {
-            color: var(--accent-blue);
-        }
-        .quick-test {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-        }
-        .quick-test h3 {
-            margin-bottom: 0.5rem;
-        }
-        .quick-test p {
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
-        #view-form {
+
+        /* No border-radius anywhere — 0px corners */
+
+        /* === NAV === */
+        .nav {
             display: flex;
-            gap: 0.75rem;
-            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 3rem;
+            background: var(--surface-lowest);
         }
-        #sim-id {
-            flex: 1;
-            min-width: 200px;
-            padding: 0.75rem 1rem;
+        .nav-logo {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 0.8rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--inverse-surface);
+            text-decoration: none;
+        }
+        .nav-links { display: flex; gap: 2rem; }
+        .nav-links a {
+            font-family: var(--font-body);
+            font-size: 0.8rem;
+            color: var(--on-surface-variant);
+            text-decoration: none;
+            letter-spacing: 0.02em;
+        }
+        .nav-links a:hover { color: var(--inverse-surface); }
+
+        /* === HERO === */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-height: 80vh;
+            background: var(--surface-lowest);
+            overflow: hidden;
+        }
+        .hero-content {
+            padding: 5rem 3rem 5rem 5rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+        .hero-eyebrow {
+            font-family: var(--font-serif);
+            font-style: italic;
             font-size: 1rem;
-            font-family: 'IBM Plex Mono', monospace;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
+            color: var(--on-surface-variant);
+        }
+        .hero-title {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            color: var(--inverse-surface);
+        }
+        .hero-title .accent { color: var(--primary-cyan); }
+        .hero-desc {
+            font-size: 0.95rem;
+            color: var(--on-surface-variant);
+            max-width: 420px;
+            line-height: 1.7;
+        }
+        .hero-actions { display: flex; align-items: center; gap: 1.5rem; margin-top: 0.5rem; }
+        .btn-primary {
+            display: inline-block;
+            padding: 0.85rem 1.75rem;
+            background: var(--inverse-surface);
+            color: var(--surface-lowest);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover { background: var(--primary-cyan); color: var(--inverse-surface); }
+        .version-badge {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--outline);
+            letter-spacing: 0.05em;
+        }
+
+        /* Hero illustration — EVM trace matrix */
+        .hero-visual {
+            position: relative;
+            background: var(--inverse-surface);
+            overflow: hidden;
+        }
+        .trace-matrix {
+            position: absolute;
+            inset: 0;
+            opacity: 0.5;
+        }
+        .trace-matrix canvas { width: 100%; height: 100%; }
+
+        /* === SECTIONS === */
+        .section {
+            padding: 6rem 5rem;
+        }
+        .section-label {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--outline);
+            margin-bottom: 1rem;
+        }
+        .section-title {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: clamp(1.8rem, 3vw, 2.5rem);
+            letter-spacing: -0.01em;
+            color: var(--inverse-surface);
+            margin-bottom: 2.5rem;
+        }
+
+        /* === INSPECT FORM === */
+        .inspect-section {
+            background: var(--surface-lowest);
+            padding: 3rem 5rem;
+        }
+        .inspect-form {
+            display: flex;
+            gap: 0;
+            max-width: 720px;
+        }
+        .inspect-input {
+            flex: 1;
+            padding: 1rem 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: var(--surface-high);
+            border: none;
+            color: var(--inverse-surface);
             outline: none;
-            transition: border-color 0.2s;
         }
-        #sim-id:focus {
-            border-color: var(--accent-blue);
-        }
-        #sim-id::placeholder {
-            color: var(--text-muted);
-        }
-        #chain-select {
-            padding: 0.75rem 1rem;
-            font-size: 0.875rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
+        .inspect-input::placeholder { color: var(--outline); }
+        .inspect-select {
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            background: var(--surface-container);
+            border: none;
+            color: var(--on-surface);
             cursor: pointer;
             outline: none;
+            display: none;
         }
-        #chain-select:focus {
-            border-color: var(--accent-blue);
-        }
-        #view-form button {
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            font-weight: 500;
-            background: var(--accent-blue);
+        .inspect-btn {
+            padding: 1rem 2rem;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: var(--inverse-surface);
+            color: var(--surface-lowest);
             border: none;
-            border-radius: 8px;
-            color: #000;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .inspect-btn:hover { background: var(--primary-cyan); color: var(--inverse-surface); }
+        .inspect-btn:disabled { opacity: 0.5; cursor: wait; }
+
+        /* === DEBUGGER PREVIEW === */
+        .debugger-preview {
+            background: var(--surface);
+        }
+        .debugger-img {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            display: block;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+        }
+
+        /* === FEATURE CARDS === */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            max-width: 900px;
+        }
+        .feature-card {
+            background: var(--surface-lowest);
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            transition: box-shadow 0.2s;
+            position: relative;
+        }
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 0;
+            background: var(--primary-cyan);
+            transition: width 0.2s;
+        }
+        .feature-card:hover::before { width: 4px; }
+        .feature-icon {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+        .feature-title {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: -0.01em;
+            color: var(--inverse-surface);
+            text-transform: uppercase;
+        }
+        .feature-desc {
+            font-size: 0.85rem;
+            color: var(--on-surface-variant);
+            line-height: 1.6;
+        }
+        .feature-meta {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--outline-variant);
+            margin-top: auto;
+            padding-top: 1rem;
+        }
+
+        /* === CTA === */
+        .cta {
+            background: var(--inverse-surface);
+            padding: 6rem 5rem;
+            text-align: center;
+        }
+        .cta-eyebrow {
+            font-family: var(--font-serif);
+            font-style: italic;
+            font-size: 1rem;
+            color: var(--primary-cyan);
+            margin-bottom: 1rem;
+        }
+        .cta-title {
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            color: var(--surface-lowest);
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            margin-bottom: 2.5rem;
+        }
+        .btn-cta {
+            display: inline-block;
+            padding: 1rem 2.5rem;
+            background: var(--primary-cyan);
+            color: var(--inverse-surface);
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-decoration: none;
+            border: none;
             cursor: pointer;
             transition: opacity 0.2s;
         }
-        #view-form button:hover {
-            opacity: 0.9;
+        .btn-cta:hover { opacity: 0.85; }
+        .cta-note {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--outline);
+            margin-top: 2rem;
         }
-        footer {
-            text-align: center;
-            margin-top: 3rem;
-            color: var(--text-muted);
+
+        /* === FOOTER === */
+        .footer {
+            background: var(--surface-lowest);
+            padding: 3rem 5rem;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 2fr;
+            gap: 2rem;
+            font-size: 0.8rem;
         }
-        footer a {
-            color: var(--accent-blue);
+        .footer-brand-name {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+        }
+        .footer-brand-desc {
+            font-size: 0.75rem;
+            color: var(--on-surface-variant);
+            line-height: 1.6;
+        }
+        .footer-col-title {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--outline);
+            margin-bottom: 0.75rem;
+        }
+        .footer-col a {
+            display: block;
+            color: var(--on-surface-variant);
             text-decoration: none;
+            font-size: 0.8rem;
+            padding: 0.25rem 0;
+        }
+        .footer-col a:hover { color: var(--inverse-surface); }
+        .footer-col a.active { color: var(--primary-cyan); }
+        .footer-copy {
+            text-align: right;
+            font-family: var(--font-mono);
+            font-size: 0.55rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--outline-variant);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .hero { grid-template-columns: 1fr; }
+            .hero-visual { min-height: 300px; }
+            .hero-content, .section, .cta, .inspect-section { padding-left: 2rem; padding-right: 2rem; }
+            .features { grid-template-columns: 1fr; }
+            .footer { grid-template-columns: 1fr 1fr; }
+            .nav { padding: 1rem 2rem; }
+            .inspect-form { flex-direction: column; }
         }
     </style>
 </head>
 <body>
-    <div id="app">
-        <header>
-            <h1>Temper</h1>
-            <p class="subtitle">EVM Transaction Simulator</p>
-        </header>
+    <!-- NAV -->
+    <nav class="nav">
+        <a href="/" class="nav-logo">Temper Tempo</a>
+        <div class="nav-links">
+            <a href="/docs">Documentation</a>
+            <a href="https://github.com/milonite/temper-test" target="_blank">Github</a>
+        </div>
+    </nav>
 
-        <main>
-            <section class="intro">
-                <h2>Simulate Ethereum Transactions</h2>
-                <p>Temper allows you to simulate EVM transactions and inspect their execution traces.</p>
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-content">
+            <span class="hero-eyebrow">EVM Introspection at Scale</span>
+            <h1 class="hero-title">TEMPER YOUR<br><span class="accent">TEMPO.</span></h1>
+            <p class="hero-desc">Precision-engineered transaction simulation for the Tempo EVM. Preview execution outcomes, gas consumption, and state mutations before committing to the chain.</p>
+            <div class="hero-actions">
+                <a href="/docs" class="btn-primary">Read the API Docs</a>
+                <span class="version-badge">&#9632; MPP ENABLED</span>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="trace-matrix"><canvas id="matrixCanvas"></canvas></div>
+        </div>
+    </section>
 
-                <div class="api-info">
-                    <h3>API Endpoints</h3>
-                    <ul>
-                        <li><code>POST /api/v1/simulate</code> - Simulate a single transaction</li>
-                        <li><code>POST /api/v1/simulate-bundle</code> - Simulate multiple transactions</li>
-                        <li><code>GET /api/v1/simulation/{id}</code> - Get stored simulation</li>
-                        <li><code>GET /api/v1/simulation/{id}/trace</code> - Get trace for viewer</li>
-                    </ul>
+    <!-- INSPECT -->
+    <section class="inspect-section">
+        <form class="inspect-form" id="inspect-form">
+            <input type="text" class="inspect-input" id="sim-id" placeholder="Paste transaction hash (0x...) or simulation ID" />
+            <select class="inspect-select" id="chain-select">
+                <optgroup label="Tempo">
+                    <option value="4217">Tempo Mainnet</option>
+                    <option value="42429">Tempo Testnet</option>
+                </optgroup>
+                <optgroup label="Ethereum">
+                    <option value="1">Ethereum</option>
+                    <option value="42161">Arbitrum</option>
+                    <option value="10">Optimism</option>
+                    <option value="8453">Base</option>
+                </optgroup>
+            </select>
+            <button type="submit" class="inspect-btn" id="inspect-btn">Inspect</button>
+        </form>
+    </section>
+
+    <!-- DEBUGGER PREVIEW -->
+    <section class="section debugger-preview">
+        <span class="section-label">Introspection Engine</span>
+        <h2 class="section-title">Trace UI Debugger</h2>
+        <div style="background: var(--surface-high); padding: 2rem; max-width: 900px;">
+            <div style="background: var(--inverse-surface); padding: 1.5rem; font-family: var(--font-mono); font-size: 0.7rem; color: #9d9d9d; line-height: 1.8; overflow: hidden; max-height: 220px;">
+                <div style="display: flex; gap: 2rem;">
+                    <div style="color: #5f5f5f; min-width: 140px;">
+                        <div>CALL TRACE TIMELINE</div>
+                        <div style="margin-top: 0.75rem; font-size: 0.65rem;">
+                            <div>▸ CALL</div>
+                            <div>▸ DELEGATECALL</div>
+                            <div>▸ STATICCALL</div>
+                            <div style="color: var(--error-container);">▸ REVERT</div>
+                        </div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div><span style="color: #00ebf9;">function</span> <span style="color: #fff;">simulateTransaction</span>(<span style="color: #b2b2b2;">bytes</span> <span style="color: #00ebf9;">data</span>) {</div>
+                        <div style="padding-left: 1rem;"><span style="color: #b2b2b2;">address</span> target = <span style="color: #00ebf9;">0xdead...1234</span>;</div>
+                        <div style="padding-left: 1rem; background: rgba(254,137,131,0.15);">require(msg.value >= minStake, <span style="color: var(--error-container);">"InsufficientFunds"</span>);</div>
+                        <div style="padding-left: 1rem;"><span style="color: #5f5f5f;">// Store failed trace data to SSTORE computation</span></div>
+                        <div style="padding-left: 1rem; margin-top: 0.5rem;">
+                            <span style="color: #5f5f5f;">RETURN:</span>
+                            <span style="color: #b2b2b2;">bytes</span>
+                        </div>
+                    </div>
+                    <div style="min-width: 120px; text-align: right; color: #5f5f5f; font-size: 0.6rem;">
+                        <div>OPCODE INSPECTOR</div>
+                        <div style="margin-top: 0.75rem;">
+                            <div>MSTORE</div>
+                            <div style="color: var(--primary-cyan);">SLOAD, GAS: <span style="color: #fff;">2,600</span></div>
+                            <div>PUSH1, 0x40</div>
+                        </div>
+                    </div>
                 </div>
-            </section>
+            </div>
+        </div>
+    </section>
 
-            <section class="quick-test">
-                <h3>Inspect Transaction</h3>
-                <p>Enter a transaction hash or simulation ID:</p>
-                <form id="view-form">
-                    <input type="text" id="sim-id" placeholder="0x... (tx hash) or simulation ID" />
-                    <select id="chain-select">
-                        <optgroup label="Tempo">
-                            <option value="4217">Tempo Mainnet</option>
-                            <option value="42429">Tempo Testnet</option>
-                            <option value="42431">Tempo Moderato</option>
-                        </optgroup>
-                        <optgroup label="Ethereum L1/L2">
-                            <option value="1">Ethereum</option>
-                            <option value="42161">Arbitrum</option>
-                            <option value="10">Optimism</option>
-                            <option value="137">Polygon</option>
-                            <option value="8453">Base</option>
-                            <option value="56">BSC</option>
-                            <option value="43114">Avalanche</option>
-                            <option value="100">Gnosis</option>
-                        </optgroup>
-                    </select>
-                    <button type="submit">Inspect</button>
-                </form>
-            </section>
-        </main>
+    <!-- FEATURES -->
+    <section class="section" style="background: var(--surface-low);">
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">⊞</div>
+                <div class="feature-title">Block Forking</div>
+                <p class="feature-desc">Simulate transactions against any historical block state or pending mempool entries with sub-millisecond latency.</p>
+                <div class="feature-meta">Execution Context · Highest At</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">▤</div>
+                <div class="feature-title">Gas Profiling</div>
+                <p class="feature-desc">Granular breakdown of opcode consumption. Identify bottlenecks before deployment.</p>
+                <div class="feature-meta">Optimization Engine</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">♡</div>
+                <div class="feature-title">Security Analysis</div>
+                <p class="feature-desc">Automate vulnerability scanning for reentrancy, state mutation, and logic flaws.</p>
+                <div class="feature-meta">Audit Pipeline</div>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">◎</div>
+                <div class="feature-title">Real-Time Trace</div>
+                <p class="feature-desc">A cinematic view of the EVM call stack. Watch tokens move and storage slots change in real-time.</p>
+                <div class="feature-meta">Visual Engine</div>
+            </div>
+        </div>
+    </section>
 
-        <footer>
-            <p><a href="/docs">Docs</a> · Powered by <a href="https://github.com/milonite/temper-test">Temper</a></p>
-        </footer>
-    </div>
+    <!-- CTA -->
+    <section class="cta">
+        <div class="cta-eyebrow">Engineered for Precision</div>
+        <h2 class="cta-title">READY TO<br>SIMULATE?</h2>
+        <a href="/docs" class="btn-cta">Read the API Docs</a>
+        <div class="cta-note">Free for individual developers · Open source projects welcome</div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <div>
+            <div class="footer-brand-name">Temper Tempo</div>
+            <p class="footer-brand-desc">The gold standard for Tempo EVM transaction debugging and delivery verification.</p>
+        </div>
+        <div class="footer-col">
+            <div class="footer-col-title">Platform</div>
+            <a href="https://explore.tempo.xyz" target="_blank">Explorer</a>
+            <a href="/" class="active">Simulator</a>
+            <a href="https://docs.tempo.xyz" target="_blank">Docs</a>
+        </div>
+        <div class="footer-col">
+            <div class="footer-col-title">Resources</div>
+            <a href="https://tempo.xyz" target="_blank">Tempo</a>
+            <a href="https://mpp.dev" target="_blank">MPP</a>
+            <a href="https://github.com/milonite/temper-test" target="_blank">Github</a>
+        </div>
+        <div class="footer-copy">
+            <span>&copy; 2026 TEMPER TEMPO.<br>ENGINEERED FOR PRECISION.</span>
+        </div>
+    </footer>
 
     <script>
-        document.getElementById('view-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const input = document.getElementById('sim-id').value.trim();
-            const chainId = document.getElementById('chain-select').value;
-            const button = this.querySelector('button');
+        // === TRACE MATRIX ANIMATION ===
+        (function() {
+            const canvas = document.getElementById('matrixCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const opcodes = ['MSTORE','SLOAD','PUSH1','CALL','JUMPI','SSTORE','RETURN','REVERT','ADD','MUL','SHA3','CALLDATALOAD','DELEGATECALL','STATICCALL','POP','DUP1','SWAP1','LOG2','MLOAD','ISZERO'];
+            let w, h, cols, drops;
 
-            if (!input) return;
+            function resize() {
+                w = canvas.width = canvas.offsetWidth * 2;
+                h = canvas.height = canvas.offsetHeight * 2;
+                ctx.scale(1, 1);
+                cols = Math.floor(w / 90);
+                drops = Array(cols).fill(0).map(() => Math.random() * h / 14);
+            }
 
-            // Check if it's a transaction hash (0x + 64 hex chars)
-            const isTxHash = /^0x[a-fA-F0-9]{64}$/.test(input);
+            function draw() {
+                ctx.fillStyle = 'rgba(14, 14, 14, 0.06)';
+                ctx.fillRect(0, 0, w, h);
+                ctx.font = '11px IBM Plex Mono';
 
-            if (isTxHash) {
-                // For tx hashes, call simulate API to fetch and store the trace
-                button.disabled = true;
-                button.textContent = 'Loading...';
+                for (let i = 0; i < cols; i++) {
+                    const op = opcodes[Math.floor(Math.random() * opcodes.length)];
+                    const x = i * 90 + 10;
+                    const y = drops[i] * 14;
 
-                try {
-                    const response = await fetch('/api/v1/simulate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chainId: parseInt(chainId),
-                            txHash: input
-                        })
-                    });
+                    // Mostly grey, occasional cyan
+                    if (Math.random() > 0.95) {
+                        ctx.fillStyle = 'rgba(0, 235, 249, 0.7)';
+                    } else if (Math.random() > 0.9) {
+                        ctx.fillStyle = 'rgba(159, 64, 61, 0.5)';
+                    } else {
+                        ctx.fillStyle = 'rgba(123, 123, 123, 0.25)';
+                    }
+                    ctx.fillText(op, x, y);
 
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch transaction');
+                    // Draw connection lines
+                    if (Math.random() > 0.97) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = 'rgba(123, 123, 123, 0.1)';
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x + 60 + Math.random() * 40, y + 20 + Math.random() * 40);
+                        ctx.stroke();
                     }
 
-                    const result = await response.json();
-                    // Redirect to simulation view (which has the debugger button)
+                    if (y > h / 2 && Math.random() > 0.98) {
+                        drops[i] = 0;
+                    }
+                    drops[i] += 0.4 + Math.random() * 0.3;
+                }
+                requestAnimationFrame(draw);
+            }
+
+            resize();
+            window.addEventListener('resize', resize);
+            // Initial fill
+            ctx.fillStyle = '#0e0e0e';
+            ctx.fillRect(0, 0, w, h);
+            draw();
+        })();
+
+        // === INSPECT FORM ===
+        const form = document.getElementById('inspect-form');
+        const input = document.getElementById('sim-id');
+        const chainSelect = document.getElementById('chain-select');
+        const inspectBtn = document.getElementById('inspect-btn');
+
+        input.addEventListener('input', function() {
+            const v = this.value.trim();
+            const isTx = v.startsWith('0x') && v.length > 10;
+            chainSelect.style.display = isTx ? 'block' : 'none';
+        });
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const val = input.value.trim();
+            if (!val) return;
+
+            const isTxHash = /^0x[a-fA-F0-9]{64}$/.test(val);
+            if (isTxHash) {
+                inspectBtn.disabled = true;
+                inspectBtn.textContent = 'Loading...';
+                try {
+                    const resp = await fetch('/api/v1/simulate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chainId: parseInt(chainSelect.value), txHash: val })
+                    });
+                    if (!resp.ok) throw new Error('Failed to fetch transaction');
+                    const result = await resp.json();
                     if (result.id) {
                         window.location.href = '/simulation/' + result.id;
                     } else {
-                        // Fallback to debugger if no ID returned
-                        window.location.href = '/debug?tx=' + input + '&chain=' + chainId;
+                        window.location.href = '/debug?tx=' + val + '&chain=' + chainSelect.value;
                     }
                 } catch (err) {
                     alert('Error: ' + err.message);
-                    button.disabled = false;
-                    button.textContent = 'Inspect';
+                    inspectBtn.disabled = false;
+                    inspectBtn.textContent = 'Inspect';
                 }
             } else {
-                // Assume it's a simulation ID
-                window.location.href = '/simulation/' + input;
+                window.location.href = '/simulation/' + val;
             }
         });
-
-        // Hide chain selector initially, show only for tx hashes
-        const input = document.getElementById('sim-id');
-        const chainSelect = document.getElementById('chain-select');
-
-        input.addEventListener('input', function() {
-            const value = this.value.trim();
-            const isTxHash = /^0x[a-fA-F0-9]{64}$/.test(value) || (value.startsWith('0x') && value.length > 10);
-            chainSelect.style.display = isTxHash ? 'inline-block' : 'none';
-        });
-
-        // Initially hide chain selector
-        chainSelect.style.display = 'none';
     </script>
 </body>
 </html>
