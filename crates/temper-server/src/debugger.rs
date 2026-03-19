@@ -342,20 +342,36 @@ interface ITIP20 {
 /// In type 0x76 transactions the root call has from=0x0 and to=0x0 —
 /// this is the protocol-level batch dispatch, not a deployed contract.
 fn tempo_batch_dispatcher_source() -> ContractSource {
-    let source = r#"// Tempo Protocol — Batch Transaction Dispatcher
-//
-// The zero address (0x0000...0000) is the entry point for Tempo's
-// type 0x76 batch transactions. It is not a deployed contract —
-// it is handled natively by the Tempo execution layer.
-//
-// A type 0x76 transaction contains:
-//   - calls[]     : array of { to, value, input } sub-calls
-//   - feeToken    : TIP-20 token used to pay gas fees
-//   - feePayer    : address sponsoring the transaction fees
-//
-// Each sub-call is executed sequentially and commits state independently.
+    let source = r#"// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/// @title  Tempo Protocol — Batch Transaction Dispatcher
+/// @notice Entry point for Tempo type 0x76 batch transactions.
+///         The zero address (0x0000...0000) is handled natively by the
+///         Tempo execution layer — it is not a deployed contract.
+///
+/// @dev    A type 0x76 transaction contains:
+///           calls[]    array of { to, value, input } sub-calls
+///           feeToken   TIP-20 address used to pay gas fees
+///           feePayer   sponsor address covering the transaction cost
+///
+///         Sub-calls execute sequentially; state commits after each one.
+interface ITempoBatchDispatcher {
+    struct Call {
+        address to;
+        uint256 value;
+        bytes   input;
+    }
+
+    /// @notice Execute a batch of calls sponsored by feePayer
+    function dispatch(
+        Call[]  calldata calls,
+        address          feeToken,
+        address          feePayer
+    ) external;
+}
 "#;
-    let file_name = "TempoBatchDispatcher.txt".to_string();
+    let file_name = "TempoBatchDispatcher.sol".to_string();
     let mut sources = HashMap::new();
     sources.insert(file_name.clone(), source.to_string());
 

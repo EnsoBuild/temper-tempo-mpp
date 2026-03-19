@@ -1625,7 +1625,7 @@
             const openDebuggerBtn = document.getElementById('openDebuggerBtn');
             if (openDebuggerBtn && simulation.txHash) {
                 openDebuggerBtn.addEventListener('click', () => {
-                    window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}`;
+                    window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}&sim=${simulationId}`;
                 });
             }
 
@@ -1633,7 +1633,7 @@
             const jumpToRevertBtn = document.getElementById('jumpToRevertBtn');
             if (jumpToRevertBtn && simulation.txHash) {
                 jumpToRevertBtn.addEventListener('click', () => {
-                    window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}&jump=revert`;
+                    window.location.href = `/debug?tx=${simulation.txHash}&chain=${currentChainId}&sim=${simulationId}&jump=revert`;
                 });
             }
 
