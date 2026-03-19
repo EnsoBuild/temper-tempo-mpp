@@ -92,7 +92,7 @@ impl MppState {
         let amount = config
             .mpp_amount
             .as_deref()
-            .unwrap_or("1000000")
+            .unwrap_or("10000") // 0.01 USDC.e (6 decimals)
             .to_string();
         let currency = config
             .mpp_currency

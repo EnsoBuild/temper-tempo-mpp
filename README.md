@@ -1,6 +1,6 @@
 # Temper
 
-**Temper is an Ethereum Transaction Simulator. It provides a super simple HTTP API which simulates a given transaction request against a local EVM.**
+**EVM transaction simulation API with a built-in trace viewer, debugger, and machine-to-machine payments via [MPP](https://mpp.dev).**
 
 [![test](https://github.com/EnsoFinance/temper/actions/workflows/test.yaml/badge.svg)](https://github.com/EnsoFinance/temper/actions/workflows/test.yaml)
 
@@ -8,461 +8,230 @@
 
 ## Features
 
-Temper supports two mutually exclusive backends via feature flags:
+- **Simulate any EVM transaction** — fork any chain at any block, execute transactions, get traces and logs
+- **Transaction hash replay** — submit a tx hash to replay and inspect historical transactions
+- **Built-in trace viewer** — web UI at `/simulation/{id}` with decoded function calls, address labels, and balance changes
+- **Step-by-step debugger** — source-level debugger at `/debug` with opcode stepping, stack/memory inspection, and Solidity source mapping
+- **MPP payment gating** — charge for simulation access using [Machine Payments Protocol](https://mpp.dev) with Tempo TIP-20 stablecoins (first 10 requests free)
+- **Tempo chain support** — TIP-20 precompiles, batch transactions (0x76), fee sponsorship
 
-- **`ethereum`** (default): Standard EVM simulation for Ethereum and EVM-compatible chains (Arbitrum, Optimism, Base, Polygon, BSC, etc.)
-- **`tempo`**: Tempo chain simulation with TIP-20 precompile support for native stablecoins
+### Supported Chains
 
-### Tempo Chain Features
+| Chain | ID | Feature |
+|-------|-----|---------|
+| Ethereum | 1 | `ethereum` |
+| Arbitrum | 42161 | `ethereum` |
+| Optimism | 10 | `ethereum` |
+| Base | 8453 | `ethereum` |
+| Polygon | 137 | `ethereum` |
+| BSC | 56 | `ethereum` |
+| Avalanche | 43114 | `ethereum` |
+| **Tempo Mainnet** | **4217** | `tempo` |
+| Tempo Testnet | 42429 | `tempo` |
+| Tempo Moderato | 42431 | `tempo` |
 
-When built with the `tempo` feature, Temper supports:
-
-- **TIP-20 Precompiles**: Native stablecoin addresses (`0x20c0...`) are automatically handled with proper storage access
-- **Batch Transactions**: Execute multiple calls in a single transaction (Tempo type 0x76)
-- **Fee Sponsorship**: Allow a `feePayer` to cover gas costs for the sender
-
-## Building
+## Quick Start
 
 ```bash
-# Build with ethereum feature (default)
-cargo build
+# 1. Clone and configure
+cp .env.example .env
+# Edit .env — add at least one RPC_URL_* (e.g. RPC_URL_TEMPO_MAINNET)
 
-# Build with tempo feature
-cargo build --no-default-features --features tempo
+# 2. Build and run
+cargo run --no-default-features --features tempo
+
+# 3. Simulate a transaction
+curl -X POST http://localhost:8080/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"chainId": 4217, "txHash": "0x97853001b7c7974d556953bc27af6a0b3d6931d313df6340a150e978754990f9"}'
 ```
 
-## Testing
+Open `http://localhost:8080/simulation/{id}` to view the trace in the web UI.
+
+## MPP Payment Gating
+
+Temper supports the [Machine Payments Protocol](https://mpp.dev) — an open standard for machine-to-machine payments using HTTP 402. This lets AI agents autonomously pay for simulation access using stablecoins on Tempo.
+
+### How it works
+
+1. **First 10 requests per IP are free**
+2. Request #11 returns `402 Payment Required` with an MPP challenge:
+   ```
+   WWW-Authenticate: Payment id="...", method="tempo", intent="charge",
+     request="<base64url: {amount, currency, recipient, chainId}>"
+   ```
+3. Client pays on-chain (TIP-20 transfer on Tempo) and sends proof:
+   ```
+   Authorization: Payment <base64url credential with tx hash>
+   ```
+4. Server verifies the Transfer event on-chain and returns the simulation
+
+### Using with the Tempo CLI
 
 ```bash
-# Run ethereum tests
-cargo test --no-default-features --features ethereum
+# Install tempo CLI
+curl -fsSL https://tempo.xyz/install | bash
 
-# Run tempo tests
-cargo test --no-default-features --features tempo
+# Login and fund wallet
+tempo wallet login
+tempo wallet fund
+
+# Make a paid request (tempo CLI auto-handles the 402 flow)
+tempo request -t -X POST \
+  --json '{"chainId":4217,"txHash":"0x978..."}' \
+  http://localhost:8080/api/v1/simulate
 ```
 
-## API
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MPP_ENABLED` | `false` | Enable MPP payment gating on `/simulate` and `/simulate-bundle` |
+| `MPP_RECIPIENT` | — | Address that receives payments (required if enabled) |
+| `MPP_AMOUNT` | `10000` | Price per simulation in smallest unit (10000 = 0.01 USDC.e) |
+| `MPP_CURRENCY` | `0x20c0...b9537d11c60e8b50` | TIP-20 token address (default: USDC.e on Tempo) |
+| `MPP_SECRET` | — | HMAC secret for challenge ID generation |
+
+Only `POST /simulate` and `POST /simulate-bundle` are gated. GET endpoints, the web UI, and the debugger remain free.
+
+## Web UI
+
+### Simulation Viewer (`/simulation/{id}`)
+
+Displays transaction overview with:
+- Sender/recipient with resolved labels (contract names, token symbols)
+- Call trace tree with decoded function signatures and parameters
+- Balance changes (token in/out)
+- Links to block explorers
+
+### Debugger (`/debug?tx={hash}&chain={id}`)
+
+Step-by-step EVM debugger with:
+- Solidity source code mapping (from Sourcify/Etherscan)
+- Current line highlighting
+- Stack, memory, and storage inspection
+- Opcode-level stepping
+
+### Address Resolution
+
+The trace viewer resolves addresses using multiple sources:
+
+| Priority | Type | Source | Display |
+|----------|------|--------|---------|
+| 1 | System | Hardcoded | *Entrypoint*, *Fee Collector* |
+| 2 | TIP-20 token | [tokenlist.tempo.xyz](https://tokenlist.tempo.xyz) | `pathUSD`, `USDC.e` |
+| 3 | Verified contract | [contracts.tempo.xyz](https://contracts.tempo.xyz), Sourcify | `OPMET`, `UniswapV3Pool` |
+| 4 | ABI (unverified) | [explore.tempo.xyz](https://explore.tempo.xyz) (whatsabi) | Function decoding |
+| 5 | Unresolved | — | `0x1234…abcd` |
+
+All addresses link to the appropriate block explorer.
+
+## API Reference
 
 ### POST /api/v1/simulate
 
-Simulates a single transaction against a local EVM.
+Simulate a single transaction or replay a historical one by tx hash.
 
-[See the full request and response types below.](#types)
+```bash
+# Direct simulation
+curl -X POST http://localhost:8080/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chainId": 1,
+    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+    "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
+    "data": "0xffa2ca3b...",
+    "gasLimit": 500000,
+    "value": "100000"
+  }'
 
-Example body:
-
-```json
-{
-  "chainId": 1,
-  "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-  "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-  "data": "0xffa2ca3b...",
-  "gasLimit": 500000,
-  "value": "100000",
-  "blockNumber": 16784600
-}
-```
-
-Example response:
-
-```json
-{
-  "gasUsed": 214622,
-  "blockNumber": 16784600,
-  "success": true,
-  "trace": { ... },
-  "logs": [ ... ],
-  "exitReason": "Return"
-}
-```
-
-Notes:
-
-- `blockNumber` can be omitted and the latest block will be used, however providing a `blockNumber` is recommended where possible to use the cache.
-
-### POST /api/v1/simulate (Tempo Batch Transactions)
-
-When using the `tempo` feature, you can simulate batch transactions with optional fee sponsorship:
-
-```json
-{
-  "chainId": 42429,
-  "from": "0x1234567890123456789012345678901234567890",
-  "gasLimit": 500000,
-  "feePayer": "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-  "calls": [
-    {
-      "to": "0x20c0000000000000000000000000000000000000",
-      "data": "0x70a08231..."
-    },
-    {
-      "to": "0x20c0000000000000000000000000000000000001",
-      "data": "0xa9059cbb...",
-      "value": "0"
-    }
-  ]
-}
-```
-
-Response includes individual call results:
-
-```json
-{
-  "gasUsed": 85000,
-  "blockNumber": 12345,
-  "success": true,
-  "callResults": [
-    { "success": true, "gasUsed": 25000, "returnData": "0x...", "exitReason": "Return" },
-    { "success": true, "gasUsed": 60000, "returnData": "0x...", "exitReason": "Return" }
-  ]
-}
+# Replay by tx hash
+curl -X POST http://localhost:8080/api/v1/simulate \
+  -H "Content-Type: application/json" \
+  -d '{"chainId": 4217, "txHash": "0x978..."}'
 ```
 
 ### POST /api/v1/simulate-bundle
 
-Simulates a bundle of transactions in order against the same EVM.
-
-[See the full request and response types below.](#types)
-
-Example body:
-
-```json
-[
-  {
-    "chainId": 1,
-    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-    "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-    "data": "0xffa2ca3b...",
-    "gasLimit": 500000,
-    "value": "100000",
-    "blockNumber": 16784600
-  }
-]
-```
-
-Example response:
-
-```json
-[{
-  "gasUsed": 214622,
-  "blockNumber": 16784600,
-  "success": true,
-  "trace": { ... },
-  "logs": [ ... ],
-  "exitReason": "Return"
-}]
-```
-
-Notes:
-
-- `chainId` must be the same in all transactions.
-- `blockNumber` can be included and incremented when a multi-block simulation is required, or omitted in all transactions to use latest.
+Simulate multiple transactions in sequence against the same EVM state.
 
 ### POST /api/v1/simulate-stateful
 
-Starts a new stateful simulation, allowing you to persist the state of a single EVM across multiple subsequent simulation requests.
+Create a persistent EVM session for multi-step simulations.
 
-[See the full request and response types below.](#types)
+### GET /api/v1/simulation/{id}
 
-Example body:
+Retrieve a stored simulation result.
 
-```json
-[
-  {
-    "chainId": 1,
-    "gasLimit": 500000,
-    "blockNumber": 16784600
-  }
-]
-```
+### POST /api/v1/debug
 
-Example response:
+Get step-by-step debug trace with source mapping.
 
-```json
-[{
-  "statefulSimulationId": "aeb708a5-81d7-4126-a0b5-0f2a78b3830e",
-}]
-```
+### GET /api/v1/contract/{chainId}/{address}/source
 
+Fetch verified contract source code.
 
-### POST /api/v1/simulate-stateful/{statefulSimulationId}
+## Configuration
 
-Simulates a bundle of transactions in order against the EVM referred to by the UUID in the URL. After the result is obtained, the EVM state will be retained for subsequent requests.
+### Required
 
-[See the full request and response types below.](#types)
-
-Example body:
-
-```json
-[
-  {
-    "chainId": 1,
-    "from": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-    "to": "0x66fc62c1748e45435b06cf8dd105b73e9855f93e",
-    "data": "0xffa2ca3b...",
-    "gasLimit": 500000,
-    "value": "100000",
-    "blockNumber": 16784600
-  }
-]
-```
-
-Example response:
-
-```json
-[{
-  "gasUsed": 214622,
-  "blockNumber": 16784600,
-  "success": true,
-  "trace": { ... },
-  "logs": [ ... ],
-  "exitReason": "Return"
-}]
-```
-Notes:
-
-- `chainId` must be the same in all transactions.
-- `blockNumber` can be included and incremented when a multi-block simulation is required, or omitted in all transactions to use latest.
-
-
-### DELETE /api/v1/simulate-stateful/{statefulSimulationId}
-
-Ends a current stateful simulation, freeing associated memory.
-
-[See the full request and response types below.](#types)
-
-Example response:
-
-```json
-{
-  "success": true
-}
-```
-
-
-
-### Authentication
-
-If you set an `API_KEY` environment variable then all calls to the API must be accompanied by a `X-API-KEY` header which contains this API Key.
-
-## Running
-
-### Locally
-
-Copy `.env.example` to `.env`, fill out required values and run:
+At least one `RPC_URL_*` environment variable for the chain you want to simulate:
 
 ```bash
-# Run with ethereum feature (default)
-cargo run
-
-# Run with tempo feature
-cargo run --no-default-features --features tempo
+RPC_URL_ETHEREUM=https://eth.example.com
+RPC_URL_TEMPO_MAINNET=https://rpc.tempo.xyz
 ```
 
-If you want the server to restart on any code changes run:
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | Server port |
+| `API_KEY` | — | Require `X-API-KEY` header on all requests |
+| `DATABASE_URL` | — | SQLite path for simulation storage (e.g. `sqlite:./temper.db`) |
+| `STORAGE_ENABLED` | auto | Enable simulation persistence (auto if DATABASE_URL set) |
+| `WEB_UI_ENABLED` | `true` | Serve web UI routes |
+| `ETHERSCAN_KEY` | — | For contract source fetching |
+| `BASE_URL` | `http://localhost:{PORT}` | Public URL for simulation links |
+
+See `.env.example` for the full list.
+
+## Building
 
 ```bash
-cargo watch -x run
-```
+# Ethereum (default)
+cargo build
 
-### Manual Testing
-
-`body.json` contains a simple request in the root of the project so once the API is running you can just run:
-
-```bash
-curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate
-```
-
-If you have `jq` installed, you can run this to see pretty traces:
-
-```bash
-curl -H "Content-Type: application/json" --data @tests/body.json http://localhost:8080/api/v1/simulate | jq -r ".formattedTrace"
-```
-
-## Supported Chains
-
-### Ethereum Feature
-- Ethereum Mainnet (1)
-- Arbitrum (42161)
-- Optimism (10)
-- Base (8453)
-- Polygon (137)
-- BSC (56)
-- Gnosis (100)
-- Avalanche C-Chain (43114)
-- Linea (59144)
-- HyperEVM (999)
-
-### Tempo Feature
-- Tempo Testnet (42429)
-
-## Environment Variables
-
-Configure RPC endpoints in `.env`:
-
-```bash
-# Ethereum chains
-RPC_URL_1=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-RPC_URL_42161=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
-RPC_URL_10=https://opt-mainnet.g.alchemy.com/v2/YOUR_KEY
-# ... etc
-
-# Tempo chain
-RPC_URL_42429=https://rpc.tempo.xyz
+# Tempo
+cargo build --no-default-features --features tempo
 ```
 
 ## Architecture
 
 ```
-src/
-├── evm/
-│   ├── mod.rs          # Feature-gated module exports
-│   ├── ethereum.rs     # Standard foundry EVM backend
-│   └── tempo.rs        # Tempo-foundry EVM backend with TIP-20 support
-├── simulation.rs       # Simulation logic and API handlers
-├── tip20.rs           # TIP-20 precompile bytecode and utilities
-├── config.rs          # Configuration and environment handling
-├── errors.rs          # Error types and rejection handling
-└── lib.rs             # Library exports and route setup
-```
+crates/
+├── temper-core/        # EVM backends, simulation logic, TIP-20 precompiles
+├── temper-db/          # SQLite storage layer
+└── temper-server/      # HTTP server (warp)
+    ├── handlers.rs     # Request handlers
+    ├── routes.rs       # Route definitions
+    ├── mpp_gate.rs     # MPP payment gating (HTTP 402 flow)
+    ├── debugger.rs     # Step-by-step debug trace with source mapping
+    ├── trace_fetcher.rs # RPC trace + receipt fetching
+    ├── contract_cache.rs # Contract source caching
+    └── storage.rs      # Simulation persistence
 
-## Roadmap
-
-- [x] Support any RPC endpoint, not just Alchemy
-- [x] Tempo chain support with TIP-20 precompiles
-- [x] Batch transaction simulation
-- [x] Fee sponsorship simulation
-- [ ] Connect to local node via IPC
-- [ ] Connect to local [reth](https://github.com/paradigmxyz/reth/) DB
-
-### Contributing
-
-[See CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Types
-
-```typescript
-export type SimulationRequest = {
-  chainId: number;
-  from: string;
-  to?: string;           // Optional for batch transactions
-  data?: string;
-  gasLimit: number;
-  value?: string;
-  accessList?: AccessListItem[];
-  blockNumber?: number;
-  blockTimestamp?: number;
-  stateOverrides?: Record<string, StateOverride>;
-  formatTrace?: boolean;
-  // Tempo-specific fields (tempo feature only)
-  calls?: TempoCall[];   // Batch calls
-  feePayer?: string;     // Fee sponsor address
-  feeToken?: string;     // ERC20 token for gas payment
-};
-
-export type TempoCall = {
-  to: string;
-  data?: string;
-  value?: string;
-};
-
-export type AccessListItem = {
-  address: string;
-  storageKeys: string[];
-};
-
-export type StateOverride = {
-  balance?: string;
-  nonce?: number;
-  code?: string;
-  state?: Record<string, string>;
-  stateDiff?: Record<string, string>;
-};
-
-export type SimulationResponse = {
-  simulationId: string;
-  gasUsed: number;
-  blockNumber: number;
-  success: boolean;
-  trace: CallTrace[];
-  logs?: Log[];
-  exitReason?: InstructionResult;
-  returnData: string;
-  formattedTrace?: string;
-  callResults?: CallResult[];  // For batch transactions
-};
-
-export type CallResult = {
-  success: boolean;
-  gasUsed: number;
-  returnData: string;
-  exitReason: InstructionResult;
-  logs: Log[];
-};
-
-export type Log = {
-  topics: string[];
-  data: string;
-  address: string;
-};
-
-export type CallTrace = {
-  callType: CallType;
-  from: string;
-  to: string;
-  value: string;
-};
-
-export enum CallType {
-  CALL,
-  STATICCALL,
-  CALLCODE,
-  DELEGATECALL,
-  CREATE,
-  CREATE2,
-}
-
-export enum InstructionResult {
-  //success codes
-  Continue,
-  Stop,
-  Return,
-  SelfDestruct,
-
-  // revert code
-  Revert,
-  CallTooDeep,
-  OutOfFund,
-
-  // error codes
-  OutOfGas,
-  OpcodeNotFound,
-  CallNotAllowedInsideStatic,
-  InvalidOpcode,
-  InvalidJump,
-  InvalidMemoryRange,
-  NotActivated,
-  StackUnderflow,
-  StackOverflow,
-  OutOfOffset,
-  FatalExternalError,
-  GasMaxFeeGreaterThanPriorityFee,
-  PrevrandaoNotSet,
-  GasPriceLessThenBasefee,
-  CallerGasLimitMoreThenBlock,
-  RejectCallerWithCode,
-  LackOfFundForGasLimit,
-  CreateCollision,
-  OverflowPayment,
-  PrecompileError,
-  NonceOverflow,
-  CreateContractLimit,
-  CreateContractWithEF,
-}
+web/
+├── script.js           # Simulation viewer (trace rendering, address resolution)
+├── debugger.js         # EVM debugger UI
+├── style.css           # Tempo explorer design system
+└── index.html          # Landing page
 ```
 
 ## Thanks
 
- - Leverages crates from [Foundry](https://github.com/foundry-rs/foundry)
- - Uses [tempo-foundry](https://github.com/tempoxyz/tempo-foundry) for Tempo chain support
- - Inspired by [gakonst's example pyrevm](https://github.com/gakonst/pyrevm)
+- [Foundry](https://github.com/foundry-rs/foundry) — EVM implementation
+- [tempo-foundry](https://github.com/tempoxyz/tempo-foundry) — Tempo chain support
+- [MPP](https://mpp.dev) — Machine Payments Protocol by Tempo and Stripe
+- [tokenlist.tempo.xyz](https://tokenlist.tempo.xyz) — TIP-20 token metadata
+- [contracts.tempo.xyz](https://contracts.tempo.xyz) — Tempo contract verification (Sourcify)
