@@ -1,4 +1,4 @@
-# Temper
+# Temper for Tempo and MPP (POC)
 
 **EVM transaction simulation API with a built-in trace viewer, debugger, and machine-to-machine payments via [MPP](https://mpp.dev).**
 
