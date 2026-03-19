@@ -19,13 +19,6 @@
 
 | Chain | ID | Feature |
 |-------|-----|---------|
-| Ethereum | 1 | `ethereum` |
-| Arbitrum | 42161 | `ethereum` |
-| Optimism | 10 | `ethereum` |
-| Base | 8453 | `ethereum` |
-| Polygon | 137 | `ethereum` |
-| BSC | 56 | `ethereum` |
-| Avalanche | 43114 | `ethereum` |
 | **Tempo Mainnet** | **4217** | `tempo` |
 | Tempo Testnet | 42429 | `tempo` |
 | Tempo Moderato | 42431 | `tempo` |
