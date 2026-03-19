@@ -5,6 +5,7 @@ pub mod contract_cache;
 pub mod debugger;
 pub mod errors;
 pub mod handlers;
+pub mod mpp_gate;
 pub mod routes;
 pub mod storage;
 pub mod trace_fetcher;

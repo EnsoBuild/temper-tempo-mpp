@@ -11,6 +11,7 @@ use temper_core::{SimulationRequest, StatefulSimulationRequest};
 use crate::config::Config;
 use crate::contract_cache::ContractCacheService;
 use crate::handlers;
+use crate::mpp_gate::MppState;
 use crate::storage::StorageService;
 use crate::SharedSimulationState;
 
@@ -20,9 +21,10 @@ pub fn api_routes(
     state: Arc<SharedSimulationState>,
     storage: Option<Arc<StorageService>>,
     contract_cache: Option<Arc<ContractCacheService>>,
+    mpp_state: Option<Arc<MppState>>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
-    simulate(config.clone(), storage.clone())
-        .or(simulate_bundle(config.clone(), storage.clone()))
+    simulate(config.clone(), storage.clone(), mpp_state.clone())
+        .or(simulate_bundle(config.clone(), storage.clone(), mpp_state))
         .or(simulate_stateful_new(config.clone(), state.clone()))
         .or(simulate_stateful_end(state.clone()))
         .or(simulate_stateful(config.clone(), state, storage.clone()))
@@ -33,26 +35,30 @@ pub fn api_routes(
         .or(contract_source(config, contract_cache))
 }
 
-/// POST /simulate
+/// POST /simulate (MPP-gated: first request free, then requires payment)
 fn simulate(
     config: Config,
     storage: Option<Arc<StorageService>>,
+    mpp_state: Option<Arc<MppState>>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::path!("simulate")
         .and(warp::post())
+        .and(crate::mpp_gate::mpp_gate(mpp_state))
         .and(json_body::<SimulationRequest>(&config))
         .and(with_config(config))
         .and(with_storage(storage))
         .and_then(handlers::simulate)
 }
 
-/// POST /simulate-bundle
+/// POST /simulate-bundle (MPP-gated)
 fn simulate_bundle(
     config: Config,
     storage: Option<Arc<StorageService>>,
+    mpp_state: Option<Arc<MppState>>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::path!("simulate-bundle")
         .and(warp::post())
+        .and(crate::mpp_gate::mpp_gate(mpp_state))
         .and(json_body::<Vec<SimulationRequest>>(&config))
         .and(with_config(config))
         .and(with_storage(storage))

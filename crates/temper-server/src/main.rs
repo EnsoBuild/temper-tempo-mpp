@@ -11,6 +11,7 @@ use temper_server::{
     config::config,
     contract_cache::ContractCacheService,
     errors::handle_rejection,
+    mpp_gate,
     routes::api_routes,
     storage::StorageService,
     Config, SharedSimulationState,
@@ -48,6 +49,23 @@ async fn main() {
         evms: Arc::new(DashMap::new()),
     });
 
+    // Initialize MPP payment gating
+    let mpp_state = if config.mpp_enabled {
+        match mpp_gate::MppState::new(&config) {
+            Ok(state) => {
+                log::info!(target: "temper_server", "MPP payment gating enabled (first request free)");
+                Some(Arc::new(state))
+            }
+            Err(e) => {
+                log::error!(target: "temper_server", "Failed to initialize MPP: {}", e);
+                None
+            }
+        }
+    } else {
+        log::info!(target: "temper_server", "MPP disabled");
+        None
+    };
+
     // Build API routes
     let api_base = warp::path("api").and(warp::path("v1"));
 
@@ -59,7 +77,7 @@ async fn main() {
         api_base.boxed()
     };
 
-    let api = api_base.and(api_routes(config.clone(), shared_state, storage.clone(), contract_cache));
+    let api = api_base.and(api_routes(config.clone(), shared_state, storage.clone(), contract_cache, mpp_state));
 
     // Build routes with optional web UI
     let routes = if config.web_ui_enabled {

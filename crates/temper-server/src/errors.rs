@@ -90,6 +90,18 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
 
     log::debug!("Handling rejection: {:?}", err);
 
+    // MPP 402 Payment Required — must be checked first to attach WWW-Authenticate header
+    if let Some(pr) = err.find::<crate::mpp_gate::PaymentRequired>() {
+        let json = warp::reply::json(&ErrorMessage {
+            code: 402,
+            message: "PAYMENT_REQUIRED".to_string(),
+        });
+        let mut resp = warp::reply::with_status(json, StatusCode::PAYMENT_REQUIRED).into_response();
+        resp.headers_mut().insert("WWW-Authenticate", pr.www_authenticate.parse().unwrap());
+        resp.headers_mut().insert("Cache-Control", "no-store".parse().unwrap());
+        return Ok(resp);
+    }
+
     if err.is_not_found() {
         code = StatusCode::NOT_FOUND;
         message = "NOT_FOUND".to_string();
@@ -158,5 +170,5 @@ pub async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> 
         message,
     });
 
-    Ok(warp::reply::with_status(json, code))
+    Ok(warp::reply::with_status(json, code).into_response())
 }

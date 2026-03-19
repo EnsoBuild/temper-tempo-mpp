@@ -49,5 +49,11 @@ mime_guess = "2"
 # alloy types (for log conversion)
 alloy-primitives = "1.5.1"
 
+# MPP payment gating (manual impl — mpp crate requires alloy ^1.7, conflicts with tempo-precompiles)
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+chrono = "0.4"
+
 [dev-dependencies]
 temp-env = { version = "0.3.4", features = ["async_closure"] }

@@ -50,6 +50,12 @@ pub struct Config {
     pub web_ui_enabled: bool,
     pub storage_enabled: bool,
     pub storage_retention_days: Option<u32>,
+    // MPP payment gating
+    pub mpp_enabled: bool,
+    pub mpp_recipient: Option<String>,
+    pub mpp_amount: Option<String>,
+    pub mpp_currency: Option<String>,
+    pub mpp_secret: Option<String>,
 }
 
 impl Config {
@@ -110,6 +116,15 @@ fn load_config() -> Config {
         .ok()
         .and_then(|v| v.parse().ok());
 
+    // MPP config
+    let mpp_enabled = std::env::var("MPP_ENABLED")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    let mpp_recipient = std::env::var("MPP_RECIPIENT").ok().filter(|s| !s.is_empty());
+    let mpp_amount = std::env::var("MPP_AMOUNT").ok().filter(|s| !s.is_empty());
+    let mpp_currency = std::env::var("MPP_CURRENCY").ok().filter(|s| !s.is_empty());
+    let mpp_secret = std::env::var("MPP_SECRET").ok().filter(|s| !s.is_empty());
+
     Config {
         port,
         rpc_urls,
@@ -121,6 +136,11 @@ fn load_config() -> Config {
         web_ui_enabled,
         storage_enabled,
         storage_retention_days,
+        mpp_enabled,
+        mpp_recipient,
+        mpp_amount,
+        mpp_currency,
+        mpp_secret,
     }
 }
 
