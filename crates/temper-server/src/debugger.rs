@@ -284,6 +284,111 @@ pub async fn fetch_debug_trace_call(
     Ok(trace)
 }
 
+/// Hardcoded ContractSource for TIP-20 native token precompiles (0x20c0... addresses).
+/// These are Tempo-native precompiles — no bytecode is deployed, so Sourcify will
+/// never find them. We return the standard TIP-20 / ERC-20 interface directly.
+fn tip20_contract_source(address: &str) -> ContractSource {
+    let source = r#"// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+/// @title TIP-20 Native Token Precompile
+/// @notice Tempo-native token at address with 0x20c0 prefix.
+///         Storage layout: slot 8 = totalSupply, slot 9 = balances, slot 10 = allowances.
+///         All TIP-20 tokens have 6 decimals.
+interface ITIP20 {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+    function decimals() external view returns (uint8);       // always 6
+    function totalSupply() external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+"#;
+    let file_name = "TIP20.sol".to_string();
+    let mut sources = HashMap::new();
+    sources.insert(file_name.clone(), source.to_string());
+
+    let abi = serde_json::json!([
+        {"type":"function","name":"name","inputs":[],"outputs":[{"type":"string"}],"stateMutability":"view"},
+        {"type":"function","name":"symbol","inputs":[],"outputs":[{"type":"string"}],"stateMutability":"view"},
+        {"type":"function","name":"decimals","inputs":[],"outputs":[{"type":"uint8"}],"stateMutability":"view"},
+        {"type":"function","name":"totalSupply","inputs":[],"outputs":[{"type":"uint256"}],"stateMutability":"view"},
+        {"type":"function","name":"balanceOf","inputs":[{"name":"account","type":"address"}],"outputs":[{"type":"uint256"}],"stateMutability":"view"},
+        {"type":"function","name":"transfer","inputs":[{"name":"to","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"type":"bool"}],"stateMutability":"nonpayable"},
+        {"type":"function","name":"allowance","inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"outputs":[{"type":"uint256"}],"stateMutability":"view"},
+        {"type":"function","name":"approve","inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"type":"bool"}],"stateMutability":"nonpayable"},
+        {"type":"function","name":"transferFrom","inputs":[{"name":"from","type":"address"},{"name":"to","type":"address"},{"name":"amount","type":"uint256"}],"outputs":[{"type":"bool"}],"stateMutability":"nonpayable"},
+        {"type":"event","name":"Transfer","inputs":[{"name":"from","type":"address","indexed":true},{"name":"to","type":"address","indexed":true},{"name":"value","type":"uint256","indexed":false}]},
+        {"type":"event","name":"Approval","inputs":[{"name":"owner","type":"address","indexed":true},{"name":"spender","type":"address","indexed":true},{"name":"value","type":"uint256","indexed":false}]}
+    ]);
+
+    ContractSource {
+        name: format!("TIP-20 Native Token ({}...{})", &address[..6], &address[address.len()-4..]),
+        sources,
+        source_list: vec![file_name],
+        abi,
+        source_map: String::new(),
+        source_locations: vec![],
+    }
+}
+
+/// Try Sourcify v2 API (used by contracts.tempo.xyz and sourcify.dev/server)
+async fn try_sourcify_v2(client: &reqwest::Client, base_url: &str, chain_id: u64, address: &str) -> Option<ContractSource> {
+    let url = format!("{}/v2/contract/{}/{}?fields=all", base_url, chain_id, address);
+
+    let response = client
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let data: serde_json::Value = response.json().await.ok()?;
+
+    let contract_name = data.get("name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let abi = data.get("abi").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+
+    // Sources are a map of { "filename": { "content": "..." } }
+    let mut sources: HashMap<String, String> = HashMap::new();
+    let mut source_list: Vec<String> = Vec::new();
+
+    if let Some(srcs) = data.get("sources").and_then(|s| s.as_object()) {
+        for (filename, file_obj) in srcs {
+            if let Some(content) = file_obj.get("content").and_then(|c| c.as_str()) {
+                sources.insert(filename.clone(), content.to_string());
+                source_list.push(filename.clone());
+            }
+        }
+    }
+
+    if sources.is_empty() {
+        return None;
+    }
+
+    Some(ContractSource {
+        name: contract_name,
+        sources,
+        source_list,
+        abi,
+        source_map: String::new(),
+        source_locations: vec![],
+    })
+}
+
 /// Check if chain is supported by Etherscan V2 API
 fn is_etherscan_supported(chain_id: u64) -> bool {
     matches!(chain_id, 1 | 137 | 56 | 42161 | 10 | 8453 | 11155111 | 17000)
@@ -359,6 +464,19 @@ pub async fn fetch_contract_source(
     etherscan_key: Option<&str>,
 ) -> Result<Option<ContractSource>, String> {
     let client = http_client();
+
+    // TIP-20 native precompiles (0x20c0... prefix) — return hardcoded interface directly
+    let addr_lower = address.to_lowercase();
+    if addr_lower.starts_with("0x20c0") {
+        return Ok(Some(tip20_contract_source(address)));
+    }
+
+    // For Tempo chains, try contracts.tempo.xyz (Sourcify v2) first
+    if matches!(chain_id, 4217 | 42429 | 42431) {
+        if let Some(source) = try_sourcify_v2(client, "https://contracts.tempo.xyz", chain_id, address).await {
+            return Ok(Some(source));
+        }
+    }
 
     // Try Etherscan V2 API first (requires API key)
     if let Some(key) = etherscan_key {

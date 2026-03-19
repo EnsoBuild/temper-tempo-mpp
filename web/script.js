@@ -111,6 +111,26 @@
         return icons[chainId] || null;
     }
 
+    const EXPLORER_TX_URLS = {
+        1:     'https://etherscan.io/tx/',
+        10:    'https://optimistic.etherscan.io/tx/',
+        56:    'https://bscscan.com/tx/',
+        100:   'https://gnosisscan.io/tx/',
+        137:   'https://polygonscan.com/tx/',
+        8453:  'https://basescan.org/tx/',
+        42161: 'https://arbiscan.io/tx/',
+        43114: 'https://snowtrace.io/tx/',
+        // Tempo
+        4217:  'https://explore.tempo.xyz/tx/',
+        42429: 'https://explore.testnet.tempo.xyz/tx/',
+        42431: 'https://explore.moderato.tempo.xyz/tx/',
+    };
+
+    function getExplorerTxUrl(chainId, txHash) {
+        const base = EXPLORER_TX_URLS[chainId];
+        return base ? base + txHash : null;
+    }
+
     function truncateValue(value) {
         if (!value) return '';
         const str = String(value);
@@ -1509,6 +1529,7 @@
                             <span class="summary-label">Tx Hash</span>
                             <span class="summary-value mono truncate" title="${simulation.txHash}">${simulation.txHash.slice(0, 10)}...${simulation.txHash.slice(-8)}</span>
                             ${createCopyIcon(simulation.txHash).outerHTML}
+                            ${getExplorerTxUrl(currentChainId, simulation.txHash) ? `<a href="${getExplorerTxUrl(currentChainId, simulation.txHash)}" target="_blank" rel="noopener noreferrer" class="explorer-link" title="View on explorer">↗</a>` : ''}
                         </div>
                         ` : ''}
                     </div>

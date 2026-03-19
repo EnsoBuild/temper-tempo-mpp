@@ -1413,3 +1413,17 @@ body.debug-mode .decoded-value {
 .summary-value.tip20-token {
     color: var(--accent-cyan);
 }
+
+.explorer-link {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    color: var(--accent-blue);
+    font-size: 0.85rem;
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+.explorer-link:hover {
+    opacity: 1;
+}
