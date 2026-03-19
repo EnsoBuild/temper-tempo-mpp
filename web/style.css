@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+/* Satoshi (display) + Geist Mono — matching Tempo explorer */
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap');
 
 * {
     margin: 0;
@@ -7,26 +9,29 @@
 }
 
 :root {
-    --bg-primary: #0a0a0a;
-    --bg-secondary: #111111;
-    --bg-tertiary: #1a1a1a;
-    --bg-hover: #1f1f1f;
-    --border-color: #2a2a2a;
-    --text-primary: #e8e8e8;
-    --text-secondary: #a0a0a0;
-    --text-muted: #666666;
-    --accent-blue: #4da6ff;
-    --accent-green: #4ade80;
+    /* Exact Tempo explorer tokens */
+    --bg-primary:    #191919;
+    --bg-secondary:  #1a1a1a;
+    --bg-tertiary:   #222222;
+    --bg-hover:      #1c1c1c;
+    --border-color:  #232323;
+    --text-primary:  #ffffff;
+    --text-secondary:#a0a0a0;
+    --text-muted:    #6e6e6e;
+    --accent-blue:   #60a5fa;
+    --accent-green:  #22c55e;
     --accent-orange: #fb923c;
-    --accent-red: #f87171;
-    --accent-gray: #9ca3af;
+    --accent-red:    #ef4444;
+    --accent-gray:   #9ca3af;
     --accent-purple: #c084fc;
-    --accent-cyan: #22d3ee;
-    --accent-yellow: #fbbf24;
+    --accent-cyan:   #22d3ee;
+    --accent-yellow: #e8c97a;
+    --font-display:  "Satoshi", ui-sans-serif, -apple-system, sans-serif;
+    --font-mono:     "Geist Mono", "IBM Plex Mono", ui-monospace, monospace;
 }
 
 body {
-    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-display);
     background-color: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.5;
@@ -73,7 +78,7 @@ header h1 {
 }
 
 .simulation-id {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--text-muted);
     background: var(--bg-tertiary);
@@ -108,7 +113,7 @@ header h1 {
 }
 
 .tenderly-sim-id {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--text-muted);
     background: var(--bg-tertiary);
@@ -182,11 +187,11 @@ header h1 {
 }
 
 .summary-value.mono {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .summary-value.address {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--accent-blue);
 }
 
@@ -228,7 +233,7 @@ header h1 {
     background: var(--bg-tertiary);
     padding: 0.75rem 1rem;
     border-radius: 6px;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8125rem;
     overflow-x: auto;
 }
@@ -272,7 +277,7 @@ header h1 {
 }
 
 .revert-message {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--accent-red);
     background: rgba(248, 113, 113, 0.1);
@@ -308,7 +313,7 @@ header h1 {
 .balance-changes-subtitle {
     font-size: 0.75rem;
     color: var(--text-muted);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .balance-changes-grid {
@@ -389,7 +394,7 @@ header h1 {
 }
 
 .balance-change-address {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--text-muted);
     cursor: help;
@@ -422,7 +427,7 @@ header h1 {
 }
 
 .balance-change-amount {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-weight: 600;
     font-size: 1rem;
 }
@@ -483,7 +488,7 @@ header h1 {
 }
 
 .meta-value {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.875rem;
     color: var(--text-primary);
     word-break: break-all;
@@ -536,7 +541,7 @@ header h1 {
 }
 
 .tx-overview-value {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8125rem;
     color: var(--text-primary);
     word-break: break-all;
@@ -591,7 +596,7 @@ header h1 {
     padding: 0.375rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 500;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-display);
     background: var(--bg-secondary);
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
@@ -609,7 +614,7 @@ header h1 {
 /* Trace Tree */
 .trace-tree {
     padding: 0.5rem 0;
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 0.8125rem;
     overflow-x: auto;
 }
@@ -649,7 +654,7 @@ header h1 {
     font-size: 0.9375rem;
     font-weight: 500;
     color: var(--text-primary);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     word-break: break-word;
 }
 
@@ -668,7 +673,7 @@ header h1 {
     padding: 0.5rem 1rem;
     font-size: 0.75rem;
     font-weight: 600;
-    font-family: 'IBM Plex Sans', sans-serif;
+    font-family: var(--font-display);
     background: var(--accent-red);
     color: var(--bg-primary);
     border: none;
@@ -854,6 +859,32 @@ header h1 {
     font-weight: 500;
 }
 
+/* Address type styling — visual hierarchy for resolved vs unresolved */
+.contract-name .addr-link {
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.contract-name .addr-link:hover {
+    text-decoration: underline;
+    opacity: 0.85;
+}
+
+/* System addresses: muted, italic — infrastructure, not user code */
+.addr-type-system { font-style: italic; }
+.addr-type-system .addr-link { color: var(--text-muted); }
+
+/* Tokens: accent cyan — resolved, meaningful */
+.addr-type-token .addr-link { color: var(--accent-cyan); }
+
+/* Verified contracts: accent purple — resolved from source */
+.addr-type-contract .addr-link { color: var(--accent-purple); }
+
+/* Unresolved addresses: muted monospace — clearly unresolved */
+.addr-type-address { font-family: var(--font-mono); font-size: 0.85em; }
+.addr-type-address .addr-link { color: var(--text-secondary); }
+
+
 .contract-address {
     color: var(--text-muted);
     font-size: 0.75rem;
@@ -1011,12 +1042,12 @@ header h1 {
 
 .decoded-type {
     color: var(--text-muted);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .decoded-value {
     color: var(--text-primary);
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     word-break: break-all;
 }
 
@@ -1336,7 +1367,7 @@ body.debug-mode .return-value {
 }
 
 body.debug-mode .decoded-value {
-    font-family: 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 /* Debugger button */
@@ -1426,4 +1457,128 @@ body.debug-mode .decoded-value {
 }
 .explorer-link:hover {
     opacity: 1;
+}
+
+/* ─── Tempo Explorer-inspired TX Overview ──────────────────────────────────── */
+
+.tx-overview {
+    display: flex;
+    gap: 2.5rem;
+    padding: 1.75rem 2rem;
+    align-items: flex-start;
+}
+
+.tx-overview-logo {
+    flex-shrink: 0;
+    padding-top: 0.25rem;
+}
+
+.tx-tempo-wordmark {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1.25rem;
+    letter-spacing: 0.12em;
+    color: #e8c97a;
+}
+
+.tx-chain-name {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+.tx-chain-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+
+.tx-overview-fields {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.tx-field-row {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.875rem;
+}
+
+.tx-field-label {
+    color: var(--text-muted);
+    min-width: 72px;
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.tx-field-value {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.tx-field-value.tx-field-link {
+    color: var(--accent-blue);
+}
+
+.tx-actions-list {
+    border-top: 1px solid var(--border-color);
+    padding: 1.25rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tx-action-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.tx-action-num {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    min-width: 1.5rem;
+}
+
+.tx-action-badge {
+    background: rgba(59,130,246,0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: inherit;
+}
+
+.tx-action-target {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.tx-action-note {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Updated network badge for Tempo */
+.tempo-wordmark {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    color: #e8c97a;
+}
+
+.tempo-network-name {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
 }

@@ -136,6 +136,8 @@ impl StorageService {
                     is_tempo_tx: None,
                     fee_token: None,
                     transaction_type: None,
+                    tx_from: None,
+                    tx_to: None,
                 }))
             }
             None => Ok(None),

@@ -8,9 +8,10 @@ use uuid::Uuid;
 use warp::reply::Json;
 use warp::Rejection;
 
+use alloy_primitives::{Address as AlAddress, Bytes, FixedBytes};
 use temper_core::{
     simulation::{run_simulation, SimulationError, SimulationResponse},
-    Evm, SimulationRequest, StatefulSimulationEndResponse,
+    Evm, Log, SimulationRequest, StatefulSimulationEndResponse,
     StatefulSimulationRequest, StatefulSimulationResponse, U256, InstructionResult,
 };
 
@@ -64,6 +65,24 @@ pub async fn simulate(
             .unwrap_or(true);
 
         let is_tempo = temper_core::simulation::is_tempo_chain(transaction.chain_id);
+        let tx_from = receipt.from.as_ref().and_then(|s| s.parse().ok());
+        let tx_to = receipt.to.as_ref().and_then(|s| s.parse().ok());
+
+        // Convert receipt logs to Log type for balance change detection
+        let logs: Vec<Log> = receipt.logs.iter().filter_map(|rl| {
+            let address: AlAddress = rl.address.as_ref()?.parse().ok()?;
+            let topics: Vec<FixedBytes<32>> = rl.topics.iter()
+                .filter_map(|t| {
+                    let hex = t.trim_start_matches("0x");
+                    let bytes = hex::decode(hex).ok()?;
+                    if bytes.len() == 32 { Some(FixedBytes::from_slice(&bytes)) } else { None }
+                })
+                .collect();
+            let data = rl.data.as_ref()
+                .and_then(|d| hex::decode(d.trim_start_matches("0x")).ok())
+                .unwrap_or_default();
+            Log::new(address, topics, Bytes::from(data))
+        }).collect();
         let mut response = SimulationResponse {
             simulation_id: 1,
             id: None,
@@ -76,13 +95,15 @@ pub async fn simulate(
             trace: vec![],
             enhanced_trace: Some(trace),
             formatted_trace: None,
-            logs: vec![],
+            logs,
             exit_reason: if success { InstructionResult::Stop } else { InstructionResult::Revert },
             return_data: Default::default(),
             call_results: None,
             is_tempo_tx: if is_tempo { Some(true) } else { None },
             fee_token: None,
             transaction_type: None,
+            tx_from,
+            tx_to,
         };
 
         // Store simulation if storage is enabled

@@ -122,12 +122,16 @@ pub struct TempoCall {
 #[serde(rename_all = "camelCase")]
 pub struct SimulationRequest {
     pub chain_id: u64,
+    /// Required for direct simulation; ignored when `tx_hash` is provided
+    #[serde(default)]
     pub from: Address,
     /// Target address for single call (use `calls` for batch transactions)
     #[serde(default)]
     pub to: Option<Address>,
     /// Calldata for single call (use `calls` for batch transactions)
     pub data: Option<Bytes>,
+    /// Required for direct simulation; ignored when `tx_hash` is provided
+    #[serde(default)]
     pub gas_limit: U256,
     /// Value for single call (use `calls` for batch transactions)
     pub value: Option<U256>,
@@ -200,6 +204,12 @@ pub struct SimulationResponse {
     /// Transaction type label (e.g. "batch" for 0x76, "eip1559" for 0x2)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_type: Option<String>,
+    /// Actual transaction sender (from receipt, not trace — important for Tempo)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_from: Option<Address>,
+    /// Actual transaction recipient
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tx_to: Option<Address>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -532,6 +542,8 @@ pub async fn run_simulation(
             is_tempo_tx: if is_tempo { Some(true) } else { None },
             fee_token,
             transaction_type: tx_type,
+            tx_from: Some(transaction.from),
+            tx_to: transaction.to,
         });
     }
 
@@ -585,5 +597,7 @@ pub async fn run_simulation(
         is_tempo_tx: if is_tempo { Some(true) } else { None },
         fee_token,
         transaction_type: tx_type,
+        tx_from: Some(transaction.from),
+        tx_to: Some(to),
     })
 }

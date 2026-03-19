@@ -188,45 +188,92 @@
         }
     }
 
-    // Simple Solidity syntax highlighting
+    // Simple Solidity syntax highlighting (single-pass tokenizer — no regex-on-HTML issues)
     function highlightSolidity(code) {
-        const keywords = ['pragma', 'solidity', 'contract', 'interface', 'library', 'function', 'modifier',
+        const keywords = new Set(['pragma', 'solidity', 'contract', 'interface', 'library', 'function', 'modifier',
             'event', 'struct', 'enum', 'mapping', 'public', 'private', 'internal', 'external', 'view',
             'pure', 'payable', 'memory', 'storage', 'calldata', 'returns', 'return', 'if', 'else',
             'for', 'while', 'do', 'break', 'continue', 'require', 'assert', 'revert', 'emit', 'new',
             'delete', 'true', 'false', 'this', 'super', 'constructor', 'receive', 'fallback',
-            'virtual', 'override', 'abstract', 'immutable', 'constant', 'indexed', 'anonymous'];
+            'virtual', 'override', 'abstract', 'immutable', 'constant', 'indexed', 'anonymous']);
 
-        const types = ['address', 'bool', 'string', 'bytes', 'byte', 'int', 'uint', 'fixed', 'ufixed',
+        const types = new Set(['address', 'bool', 'string', 'bytes', 'byte', 'int', 'uint', 'fixed', 'ufixed',
             'int8', 'int16', 'int32', 'int64', 'int128', 'int256',
             'uint8', 'uint16', 'uint32', 'uint64', 'uint128', 'uint256',
-            'bytes1', 'bytes2', 'bytes4', 'bytes8', 'bytes16', 'bytes32'];
+            'bytes1', 'bytes2', 'bytes4', 'bytes8', 'bytes16', 'bytes32']);
 
-        let result = code
-            // Escape HTML
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            // Comments
-            .replace(/(\/\/.*$)/gm, '<span class="sol-comment">$1</span>')
-            .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="sol-comment">$1</span>')
-            // Strings
-            .replace(/("(?:[^"\\]|\\.)*")/g, '<span class="sol-string">$1</span>')
-            .replace(/('(?:[^'\\]|\\.)*')/g, '<span class="sol-string">$1</span>')
-            // Numbers (hex and decimal)
-            .replace(/\b(0x[a-fA-F0-9]+)\b/g, '<span class="sol-number">$1</span>')
-            .replace(/\b(\d+)\b/g, '<span class="sol-number">$1</span>');
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-        // Keywords
-        for (const kw of keywords) {
-            const regex = new RegExp(`\\b(${kw})\\b`, 'g');
-            result = result.replace(regex, '<span class="sol-keyword">$1</span>');
-        }
+        let result = '';
+        let i = 0;
 
-        // Types
-        for (const t of types) {
-            const regex = new RegExp(`\\b(${t})\\b`, 'g');
-            result = result.replace(regex, '<span class="sol-type">$1</span>');
+        while (i < code.length) {
+            // Single-line comment
+            if (code[i] === '/' && code[i + 1] === '/') {
+                let end = code.indexOf('\n', i);
+                if (end === -1) end = code.length;
+                result += `<span class="sol-comment">${esc(code.slice(i, end))}</span>`;
+                i = end;
+                continue;
+            }
+            // Multi-line comment
+            if (code[i] === '/' && code[i + 1] === '*') {
+                let end = code.indexOf('*/', i + 2);
+                if (end === -1) end = code.length - 2;
+                result += `<span class="sol-comment">${esc(code.slice(i, end + 2))}</span>`;
+                i = end + 2;
+                continue;
+            }
+            // Double-quoted string
+            if (code[i] === '"') {
+                let j = i + 1;
+                while (j < code.length && code[j] !== '"') { if (code[j] === '\\') j++; j++; }
+                result += `<span class="sol-string">${esc(code.slice(i, j + 1))}</span>`;
+                i = j + 1;
+                continue;
+            }
+            // Single-quoted string
+            if (code[i] === "'") {
+                let j = i + 1;
+                while (j < code.length && code[j] !== "'") { if (code[j] === '\\') j++; j++; }
+                result += `<span class="sol-string">${esc(code.slice(i, j + 1))}</span>`;
+                i = j + 1;
+                continue;
+            }
+            // Hex number
+            if (code[i] === '0' && code[i + 1] === 'x') {
+                let j = i + 2;
+                while (j < code.length && /[a-fA-F0-9]/.test(code[j])) j++;
+                result += `<span class="sol-number">${esc(code.slice(i, j))}</span>`;
+                i = j;
+                continue;
+            }
+            // Decimal number (not part of identifier)
+            if (/[0-9]/.test(code[i]) && (i === 0 || !/[a-zA-Z_]/.test(code[i - 1]))) {
+                let j = i;
+                while (j < code.length && /[0-9]/.test(code[j])) j++;
+                result += `<span class="sol-number">${esc(code.slice(i, j))}</span>`;
+                i = j;
+                continue;
+            }
+            // Identifier — keyword, type, or plain name
+            if (/[a-zA-Z_$]/.test(code[i])) {
+                let j = i;
+                while (j < code.length && /[a-zA-Z0-9_$]/.test(code[j])) j++;
+                const word = code.slice(i, j);
+                if (keywords.has(word)) {
+                    result += `<span class="sol-keyword">${esc(word)}</span>`;
+                } else if (types.has(word)) {
+                    result += `<span class="sol-type">${esc(word)}</span>`;
+                } else {
+                    result += esc(word);
+                }
+                i = j;
+                continue;
+            }
+            // Everything else
+            result += esc(code[i]);
+            i++;
         }
 
         return result;
@@ -1000,6 +1047,16 @@
         // Check if transaction reverted
         const hasRevert = debugTrace.failed || callTrace.some(c => !c.success);
 
+        const CHAIN_NAMES = {
+            4217: 'Tempo', 42429: 'Tempo Testnet', 42431: 'Tempo Moderato',
+            1: 'Ethereum', 137: 'Polygon', 42161: 'Arbitrum',
+            10: 'Optimism', 8453: 'Base', 56: 'BSC',
+        };
+        const isTempoChain = TEMPO_CHAIN_IDS.has(chainId);
+        const chainLabel = isTempoChain
+            ? `<span class="chain-badge tempo-badge"><span class="tempo-badge-icon">T</span>${CHAIN_NAMES[chainId] || 'Tempo'}</span>`
+            : `<span class="chain-badge">${CHAIN_NAMES[chainId] || 'Chain ' + chainId}</span>`;
+
         app.innerHTML = `
             <header class="debugger-header">
                 <div class="logo">
@@ -1009,7 +1066,7 @@
                 </div>
                 <div class="tx-info">
                     <span class="tx-hash">${formatHex(txHash, 24)}</span>
-                    <span class="chain-badge">Chain ${chainId}</span>
+                    ${chainLabel}
                     <span class="step-count">${callTrace.length} calls</span>
                     ${hasRevert ? '<button class="jump-revert-btn" id="jumpToRevertBtn" title="Jump to the failing call">Jump to Revert</button>' : ''}
                     <button class="exit-btn" id="exitDebuggerBtn" title="Exit debugger">✕ Exit</button>
@@ -1078,13 +1135,27 @@
         document.getElementById('forwardBtn').addEventListener('click', stepForward);
         document.getElementById('endBtn').addEventListener('click', goToEnd);
 
-        // Back to simulation button
-        document.getElementById('backToSimBtn').addEventListener('click', () => {
+        // Back to simulation button — always goes to simulation overview
+        document.getElementById('backToSimBtn').addEventListener('click', async () => {
             if (simId) {
                 window.location.href = `/simulation/${simId}`;
-            } else {
-                window.history.back();
+                return;
             }
+            // No sim ID in URL — fetch/create simulation then redirect
+            const btn = document.getElementById('backToSimBtn');
+            if (btn) btn.textContent = '...';
+            try {
+                const resp = await fetch('/api/v1/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chainId: chainId, txHash: txHash }),
+                });
+                if (resp.ok) {
+                    const result = await resp.json();
+                    if (result.id) { window.location.href = '/simulation/' + result.id; return; }
+                }
+            } catch (e) {}
+            window.location.href = '/';
         });
 
         // Jump to revert button

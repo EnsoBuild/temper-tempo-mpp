@@ -141,8 +141,8 @@ fn serve_debug_page() -> impl warp::Reply {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Temper Debugger</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/debugger.css">
+    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link rel="stylesheet" href="/static/debugger.css?v=11">
 </head>
 <body>
     <div id="app">
@@ -151,7 +151,7 @@ fn serve_debug_page() -> impl warp::Reply {
             <div>Initializing debugger...</div>
         </div>
     </div>
-    <script src="/static/debugger.js"></script>
+    <script src="/static/debugger.js?v=11"></script>
     <script>
         const params = new URLSearchParams(window.location.search);
         const txHash = params.get('tx');
@@ -187,7 +187,7 @@ async fn serve_simulation_page(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Simulation {id} - Temper</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
     <div id="app">
@@ -195,8 +195,8 @@ async fn serve_simulation_page(
         <div id="simulation-id" data-id="{id}"></div>
         <div id="trace-container"></div>
     </div>
-    <script src="/static/script.js"></script>
-    <script src="/static/temper-adapter.js"></script>
+    <script src="/static/script.js?v=11"></script>
+    <script src="/static/temper-adapter.js?v=11"></script>
     <script>
         window.SIMULATION_ID = "{id}";
         if (typeof loadSimulation === 'function') {{

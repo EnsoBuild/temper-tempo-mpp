@@ -126,9 +126,142 @@
         42431: 'https://explore.moderato.tempo.xyz/tx/',
     };
 
+    const EXPLORER_ADDR_URLS = {
+        1:     'https://etherscan.io/address/',
+        10:    'https://optimistic.etherscan.io/address/',
+        56:    'https://bscscan.com/address/',
+        100:   'https://gnosisscan.io/address/',
+        137:   'https://polygonscan.com/address/',
+        8453:  'https://basescan.org/address/',
+        42161: 'https://arbiscan.io/address/',
+        43114: 'https://snowtrace.io/address/',
+        // Tempo
+        4217:  'https://explore.tempo.xyz/address/',
+        42429: 'https://explore.testnet.tempo.xyz/address/',
+        42431: 'https://explore.moderato.tempo.xyz/address/',
+    };
+
     function getExplorerTxUrl(chainId, txHash) {
         const base = EXPLORER_TX_URLS[chainId];
         return base ? base + txHash : null;
+    }
+
+    function getExplorerAddrUrl(chainId, addr) {
+        const base = EXPLORER_ADDR_URLS[chainId];
+        return base ? base + addr : null;
+    }
+
+    const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+    // ─── Address Resolution ────────────────────────────────────────────
+    //
+    // Priority: system label → TIP-20 token symbol → Sourcify/Etherscan
+    //           contract name → shortened address
+    //
+    // Returns: { label, type, tooltip }
+    //   type: "system" | "token" | "contract" | "address"
+
+    // Known system/infrastructure addresses per chain
+    const SYSTEM_ADDRESSES = {
+        // Tempo chains — zero address acts as the tx entrypoint/dispatcher
+        4217:  { [ZERO_ADDRESS]: 'Entrypoint', '0xfeec000000000000000000000000000000000000': 'Fee Collector' },
+        42429: { [ZERO_ADDRESS]: 'Entrypoint', '0xfeec000000000000000000000000000000000000': 'Fee Collector' },
+        42431: { [ZERO_ADDRESS]: 'Entrypoint', '0xfeec000000000000000000000000000000000000': 'Fee Collector' },
+    };
+
+    // Known TIP-20 tokens from tokenlist.tempo.xyz (all Tempo chains)
+    const TIP20_TOKENS = {
+        '4217': {
+            '0x20c0000000000000000000000000000000000000': { symbol: 'pathUSD', name: 'PathUSD', decimals: 6 },
+            '0x20c000000000000000000000b9537d11c60e8b50': { symbol: 'USDC.e', name: 'Bridged USDC (Stargate)', decimals: 6 },
+            '0x20c0000000000000000000001621e21f71cf12fb': { symbol: 'EURC.e', name: 'Bridged EURC (Stargate)', decimals: 6 },
+            '0x20c00000000000000000000014f22ca97301eb73': { symbol: 'USDT0', name: 'USDT0', decimals: 6 },
+            '0x20c0000000000000000000003554d28269e0f3c2': { symbol: 'frxUSD', name: 'Frax USD', decimals: 6 },
+            '0x20c0000000000000000000000520792dcccccccc': { symbol: 'cUSD', name: 'Cap USD', decimals: 6 },
+            '0x20c00000000000000000000031f228af88888888': { symbol: 'stcUSD', name: 'Staked Cap USD', decimals: 6 },
+        },
+        '42429': {
+            '0x20c0000000000000000000000000000000000000': { symbol: 'pathUSD', name: 'PathUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000001': { symbol: 'alphaUSD', name: 'AlphaUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000002': { symbol: 'betaUSD', name: 'BetaUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000003': { symbol: 'thetaUSD', name: 'ThetaUSD', decimals: 6 },
+            '0x20c0000000000000000000009e8d7eb59b783726': { symbol: 'USDC.e', name: 'Bridged USDC (Stargate)', decimals: 6 },
+            '0x20c000000000000000000000d72572838bbee59c': { symbol: 'EURC.e', name: 'Bridged EURC (Stargate)', decimals: 6 },
+        },
+        '42431': {
+            '0x20c0000000000000000000000000000000000000': { symbol: 'pathUSD', name: 'PathUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000001': { symbol: 'alphaUSD', name: 'AlphaUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000002': { symbol: 'betaUSD', name: 'BetaUSD', decimals: 6 },
+            '0x20c0000000000000000000000000000000000003': { symbol: 'thetaUSD', name: 'ThetaUSD', decimals: 6 },
+        },
+    };
+
+    // Unified cache for all address resolution
+    const addressNameCache = new Map();
+
+    /**
+     * Resolve a human-readable label for any address.
+     * Returns { label, type, tooltip } where type helps style the result.
+     */
+    async function resolveAddressName(address, chainId) {
+        if (!address) return null;
+        const lower = address.toLowerCase();
+        const cacheKey = `${chainId}:${lower}`;
+        if (addressNameCache.has(cacheKey)) return addressNameCache.get(cacheKey);
+
+        let result = null;
+
+        // 1. System addresses (instant, no fetch)
+        const systemMap = SYSTEM_ADDRESSES[chainId];
+        if (systemMap && systemMap[lower]) {
+            result = { label: systemMap[lower], type: 'system', tooltip: `${systemMap[lower]} (${address})` };
+        }
+
+        // 2. TIP-20 tokens (local map → tokenlist API)
+        if (!result && isTip20Address(lower)) {
+            const chainTokens = TIP20_TOKENS[String(chainId)];
+            const local = chainTokens && chainTokens[lower];
+            if (local) {
+                result = { label: local.symbol, type: 'token', tooltip: `${local.name} (${address})` };
+            } else {
+                // Fetch from tokenlist API
+                try {
+                    const resp = await fetch(`https://tokenlist.tempo.xyz/asset/${chainId}/${lower}`, { signal: AbortSignal.timeout(2000) });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        if (data.symbol) {
+                            result = { label: data.symbol, type: 'token', tooltip: `${data.name || data.symbol} (${address})` };
+                        }
+                    }
+                } catch {}
+                // If tokenlist doesn't know it, it's still a TIP-20 — mark as unknown token
+                if (!result) {
+                    result = { label: shortenAddress(lower), type: 'token', tooltip: `TIP-20 Token (${address})` };
+                }
+            }
+        }
+
+        // 3. Verified contract name (Sourcify / Etherscan)
+        if (!result) {
+            const contractInfo = await fetchContractInfo(lower, chainId);
+            if (contractInfo?.name) {
+                result = { label: contractInfo.name, type: 'contract', tooltip: `${contractInfo.name} (${address})`, abi: contractInfo.abi };
+            }
+        }
+
+        // 4. Fallback: shortened address
+        if (!result) {
+            result = { label: shortenAddress(lower), type: 'address', tooltip: address };
+        }
+
+        addressNameCache.set(cacheKey, result);
+        return result;
+    }
+
+    // Shorten an address to 0x1234…abcd form
+    function shortenAddress(addr) {
+        if (!addr || addr.length < 10) return addr;
+        return addr.slice(0, 6) + '\u2026' + addr.slice(-4);
     }
 
     function truncateValue(value) {
@@ -161,6 +294,14 @@
         '1:0xdac17f958d2ee523a2206206994597c13d831ec7': { symbol: 'USDT', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png' },
         '1:0x6b175474e89094c44da98b954eedeac495271d0f': { symbol: 'DAI', decimals: 18, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x6B175474E89094C44Da98b954EesdeAC495271d0F/logo.png' },
         '1:0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': { symbol: 'WBTC', decimals: 8, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599/logo.png' },
+        // Tempo Mainnet TIP-20 tokens
+        '4217:0x20c0000000000000000000000000000000000000': { symbol: 'pathUSD', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c0000000000000000000000000000000000000' },
+        '4217:0x20c000000000000000000000b9537d11c60e8b50': { symbol: 'USDC.e', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c000000000000000000000b9537d11c60e8b50' },
+        '4217:0x20c0000000000000000000001621e21f71cf12fb': { symbol: 'EURC.e', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c0000000000000000000001621e21f71cf12fb' },
+        '4217:0x20c00000000000000000000014f22ca97301eb73': { symbol: 'USDT0', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c00000000000000000000014f22ca97301eb73' },
+        '4217:0x20c0000000000000000000003554d28269e0f3c2': { symbol: 'frxUSD', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c0000000000000000000003554d28269e0f3c2' },
+        '4217:0x20c0000000000000000000000520792dcccccccc': { symbol: 'cUSD', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c0000000000000000000000520792dcccccccc' },
+        '4217:0x20c00000000000000000000031f228af88888888': { symbol: 'stcUSD', decimals: 6, logo: 'https://tokenlist.tempo.xyz/icon/4217/0x20c00000000000000000000031f228af88888888' },
         // Common across chains
         'usdc': { symbol: 'USDC', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png' },
         'usdt': { symbol: 'USDT', decimals: 6, logo: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png' },
@@ -311,8 +452,14 @@
             return contractCache.get(cacheKey);
         }
 
-        // Race Sourcify and Etherscan in parallel - use first successful result
+        // Race all available sources in parallel - use first successful result
         const promises = [fetchFromSourcify(address, chainId)];
+
+        // Tempo chains: also try Tempo's own Sourcify instance + explorer ABI endpoint
+        if (isTempoChain(chainId)) {
+            promises.push(fetchFromTempoContracts(address, chainId));
+            promises.push(fetchFromTempoExplorer(address, chainId));
+        }
 
         const explorerApi = EXPLORER_APIS[chainId];
         if (explorerApi) {
@@ -369,6 +516,46 @@
             return { name: contractName, abi };
         }
         throw new Error('No contract info');
+    }
+
+    // Tempo's own Sourcify instance at contracts.tempo.xyz (v2 API)
+    async function fetchFromTempoContracts(address, chainId) {
+        const resp = await fetch(
+            `https://contracts.tempo.xyz/v2/contract/${chainId}/${address}?fields=name,abi`,
+            { signal: AbortSignal.timeout(3000) }
+        );
+        if (!resp.ok) throw new Error('Not found');
+        const data = await resp.json();
+        if (data.name || data.abi) {
+            return { name: data.name || null, abi: data.abi || null };
+        }
+        throw new Error('No contract info');
+    }
+
+    // Tempo explorer ABI batch endpoint — uses whatsabi for unverified contracts too
+    const TEMPO_EXPLORER_URLS = {
+        4217:  'https://explore.tempo.xyz',
+        42429: 'https://explore.testnet.tempo.xyz',
+        42431: 'https://explore.moderato.tempo.xyz',
+    };
+
+    async function fetchFromTempoExplorer(address, chainId) {
+        const base = TEMPO_EXPLORER_URLS[chainId];
+        if (!base) throw new Error('No explorer');
+        const resp = await fetch(`${base}/api/abi/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ addresses: [address.toLowerCase()], selectors: [] }),
+            signal: AbortSignal.timeout(3000),
+        });
+        if (!resp.ok) throw new Error('Failed');
+        const data = await resp.json();
+        const abi = data.abis?.[address.toLowerCase()];
+        if (abi && Array.isArray(abi) && abi.length > 0) {
+            // Try to extract contract name from ABI (constructor or contract-level)
+            return { name: null, abi };
+        }
+        throw new Error('No ABI');
     }
 
     async function fetchFromEtherscan(address, chainId, explorerApi) {
@@ -441,10 +628,10 @@
         return null;
     }
 
-    // Get just the contract name (convenience wrapper)
+    // Get a human label for any address (used for inline parameter display)
     async function fetchContractName(address, chainId) {
-        const info = await fetchContractInfo(address, chainId);
-        return info?.name || null;
+        const resolved = await resolveAddressName(address, chainId);
+        return resolved?.type !== 'address' ? resolved.label : null;
     }
 
 
@@ -734,12 +921,11 @@
         const mainLine = document.createElement('div');
         mainLine.className = 'call-main';
 
-        // Fetch contract info (name + ABI) for the target address
+        // Resolve target address: system → token → contract → shortened
         const toAddr = call.to;
-        const contractInfo = toAddr ? await fetchContractInfo(toAddr, currentChainId) : null;
-        const toName = contractInfo?.name || null;
-        const abiMap = contractInfo?.abi ? buildAbiFunctionMap(contractInfo.abi) : null;
         const isTip20 = toAddr && isTip20Address(toAddr);
+        const resolved = toAddr ? await resolveAddressName(toAddr, currentChainId) : null;
+        const abiMap = resolved?.abi ? buildAbiFunctionMap(resolved.abi) : null;
 
         if (toAddr) {
             // TIP-20 precompile badge
@@ -751,10 +937,25 @@
                 content.insertBefore(tip20Badge, content.firstChild);
             }
 
+            const explorerUrl = getExplorerAddrUrl(currentChainId, toAddr);
+
             const contractSpan = document.createElement('span');
-            contractSpan.className = 'contract-name';
-            contractSpan.textContent = toName || toAddr;
-            if (toName) contractSpan.title = toAddr;
+            contractSpan.className = `contract-name addr-type-${resolved.type}`;
+
+            if (explorerUrl) {
+                const link = document.createElement('a');
+                link.href = explorerUrl;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.className = 'addr-link';
+                link.textContent = resolved.label;
+                link.title = resolved.tooltip;
+                contractSpan.appendChild(link);
+            } else {
+                contractSpan.textContent = resolved.label;
+                contractSpan.title = resolved.tooltip;
+            }
+
             mainLine.appendChild(contractSpan);
             mainLine.appendChild(createCopyIcon(toAddr));
         } else if (callType === 'CREATE' || callType === 'CREATE2') {
@@ -1069,10 +1270,10 @@
     }
 
     // Parse balance changes from simulation logs
-    function parseBalanceChanges(simulation) {
+    function parseBalanceChanges(simulation, overrideFrom, overrideTo) {
         const trace = simulation.enhancedTrace || (simulation.trace && simulation.trace[0]);
-        const txFrom = (trace?.from || '').toLowerCase();
-        const txTo = (trace?.to || '').toLowerCase();
+        const txFrom = (overrideFrom || simulation.txFrom || trace?.from || '').toLowerCase();
+        const txTo = (overrideTo || simulation.txTo || trace?.to || '').toLowerCase();
 
         // Track balance changes per address per token
         // Key: `${address}:${tokenAddress}` (tokenAddress = 'native' for native token)
@@ -1163,8 +1364,8 @@
         return { changes: result, txFrom, txTo };
     }
 
-    async function renderBalanceChanges(simulation) {
-        const { changes, txFrom } = parseBalanceChanges(simulation);
+    async function renderBalanceChanges(simulation, overrideFrom, overrideTo) {
+        const { changes, txFrom } = parseBalanceChanges(simulation, overrideFrom, overrideTo);
 
         if (changes.length === 0) {
             return null;
@@ -1190,7 +1391,8 @@
         // Show whose balance we're showing
         const subtitle = document.createElement('div');
         subtitle.className = 'balance-changes-subtitle';
-        subtitle.textContent = txFrom ? `for ${txFrom.slice(0, 6)}...${txFrom.slice(-4)}` : '';
+        const txFromResolved = txFrom ? await resolveAddressName(txFrom, currentChainId) : null;
+        subtitle.textContent = txFromResolved ? `for ${txFromResolved.type !== 'address' ? txFromResolved.label : shortenAddress(txFrom)}` : '';
         header.appendChild(subtitle);
 
         container.appendChild(header);
@@ -1382,6 +1584,15 @@
             const isTempoTx = simulation.isTempoTx || isTempoChain(currentChainId);
             const isBatchTx = simulation.transactionType === 'batch' || (simulation.callResults && simulation.callResults.length > 0);
             const feeToken = simulation.feeToken;
+            const feeTokenResolved = feeToken ? await resolveAddressName(feeToken, currentChainId) : null;
+
+            // Use txFrom/txTo from receipt (correct on Tempo), fall back to trace
+            const senderAddr = simulation.txFrom || trace?.from;
+            const recipientAddr = simulation.txTo || trace?.to;
+            const [senderResolved, recipientResolved] = await Promise.all([
+                senderAddr ? resolveAddressName(senderAddr, currentChainId) : null,
+                recipientAddr ? resolveAddressName(recipientAddr, currentChainId) : null,
+            ]);
 
             // Tenderly-style header
             const header = document.createElement('div');
@@ -1391,8 +1602,8 @@
             let networkBadgeHtml = '';
             if (isTempoTx) {
                 networkBadgeHtml = `<div class="tenderly-network tempo-network">
-                    <span class="tempo-badge">⚡ Tempo</span>
-                    <span>${chainName}</span>
+                    <span class="tempo-wordmark">TEMPO</span>
+                    <span class="tempo-network-name">${chainName}</span>
                 </div>`;
             } else {
                 networkBadgeHtml = `<div class="tenderly-network">
@@ -1435,15 +1646,23 @@
             let functionDisplay = '';
             if (trace && trace.input && trace.input !== '0x' && trace.input.length >= 10) {
                 const selector = trace.input.slice(0, 10);
-                const sig = await lookupSelector(selector);
+                const sigs = await decodeSelector(selector);
+                const sig = sigs && sigs[0];
                 if (sig) {
-                    const decoded = await decodeCalldata(trace.input, sig);
+                    const parsed = parseSignature(sig);
+                    const knownNames = getKnownParamNames(sig);
+                    const paramTypes = parsed.params;
+                    const rawParams = decodeParams(trace.input, paramTypes);
+                    const params = rawParams.map((v, i) => ({
+                        name: knownNames[i] || `arg${i}`,
+                        value: v,
+                    }));
                     functionDisplay = `
                         <div class="summary-row function-row">
                             <span class="summary-label">Function</span>
                             <div class="function-call">
-                                <span class="function-name">${decoded.name}</span>
-                                <span class="function-params">(${decoded.params.map(p =>
+                                <span class="function-name">${parsed.name}</span>
+                                <span class="function-params">(${params.map(p =>
                                     `<span class="param"><span class="param-name">${p.name}</span>: <span class="param-value" title="${p.value}">${truncateValue(p.value)}</span></span>`
                                 ).join(', ')})</span>
                             </div>
@@ -1475,8 +1694,8 @@
             const feeTokenRow = feeToken ? `
                 <div class="summary-row">
                     <span class="summary-label">Fee Token</span>
-                    <span class="summary-value address${isTip20Address(feeToken) ? ' tip20-token' : ''}" title="${feeToken}">
-                        ${isTip20Address(feeToken) ? '⚡ ' : ''}${feeToken.slice(0, 10)}...${feeToken.slice(-6)}
+                    <span class="summary-value address addr-type-${feeTokenResolved.type}" title="${feeTokenResolved.tooltip}">
+                        ${feeTokenResolved.label}
                     </span>
                     ${createCopyIcon(feeToken).outerHTML}
                 </div>
@@ -1490,56 +1709,71 @@
                 </div>
             ` : '';
 
+            // Derive action name from decoded function or tx type
+            const actionName = functionDisplay
+                ? (functionDisplay.match(/class="function-name">([^<]+)</) || [])[1]
+                : (isBatchTx ? 'Batch' : null);
+
             summaryCard.innerHTML = `
-                <div class="summary-grid">
-                    <div class="summary-left">
-                        <div class="summary-row">
-                            <span class="summary-label">Status</span>
-                            ${statusBadge}
-                        </div>
-                        <div class="summary-row">
-                            <span class="summary-label">From</span>
-                            <span class="summary-value address">${trace?.from || 'N/A'}</span>
-                            ${trace?.from ? createCopyIcon(trace.from).outerHTML : ''}
-                        </div>
-                        <div class="summary-row">
-                            <span class="summary-label">Interacted With</span>
-                            <span class="summary-value address${isBatchTx ? '' : (trace?.to && isTip20Address(trace.to) ? ' tip20-token' : '')}">${isBatchTx ? 'Batch Transaction' : (trace?.to || 'Contract Creation')}</span>
-                            ${!isBatchTx && trace?.to ? createCopyIcon(trace.to).outerHTML : ''}
-                        </div>
-                        ${functionDisplay}
-                        ${feeTokenRow}
-                        ${batchSummary}
+                <div class="tx-overview">
+                    <div class="tx-overview-logo">
+                        ${isTempoTx ? '<span class="tx-tempo-wordmark">TEMPO</span>' : (chainIcon ? `<img src="${chainIcon}" class="tx-chain-icon" alt="${chainName}">` : `<span class="tx-chain-name">${chainName}</span>`)}
                     </div>
-                    <div class="summary-right">
-                        <div class="summary-row">
-                            <span class="summary-label">Block Number</span>
-                            <span class="summary-value">${simulation.blockNumber?.toLocaleString() || 'N/A'}</span>
+                    <div class="tx-overview-fields">
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">Status</span>
+                            <span class="tx-field-value">${statusBadge}</span>
                         </div>
-                        <div class="summary-row">
-                            <span class="summary-label">Gas Used</span>
-                            <span class="summary-value">${simulation.gasUsed?.toLocaleString() || 'N/A'}</span>
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">Block</span>
+                            <span class="tx-field-value tx-field-link">#${simulation.blockNumber?.toLocaleString() || 'N/A'}</span>
                         </div>
-                        <div class="summary-row">
-                            <span class="summary-label">Value</span>
-                            <span class="summary-value">${formatValue(trace?.value) || `0 ${getNativeToken()}`}</span>
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">From</span>
+                            <span class="tx-field-value tx-field-link addr-type-${senderResolved?.type || 'address'}" title="${senderResolved?.tooltip || ''}">${senderAddr ? (senderResolved?.type !== 'address' ? senderResolved.label : shortenAddress(senderAddr)) : 'N/A'}</span>
+                            ${senderAddr ? createCopyIcon(senderAddr).outerHTML : ''}
+                            ${senderAddr && getExplorerAddrUrl(currentChainId, senderAddr) ? `<a href="${getExplorerAddrUrl(currentChainId, senderAddr)}" target="_blank" rel="noopener noreferrer" class="explorer-link" title="View on explorer">↗</a>` : ''}
+                        </div>
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">To</span>
+                            <span class="tx-field-value tx-field-link addr-type-${recipientResolved?.type || 'address'}" title="${recipientResolved?.tooltip || ''}">${recipientAddr ? (recipientResolved?.type !== 'address' ? recipientResolved.label : shortenAddress(recipientAddr)) : 'N/A'}</span>
+                            ${recipientAddr ? createCopyIcon(recipientAddr).outerHTML : ''}
+                            ${recipientAddr && getExplorerAddrUrl(currentChainId, recipientAddr) ? `<a href="${getExplorerAddrUrl(currentChainId, recipientAddr)}" target="_blank" rel="noopener noreferrer" class="explorer-link" title="View on explorer">↗</a>` : ''}
                         </div>
                         ${simulation.txHash ? `
-                        <div class="summary-row">
-                            <span class="summary-label">Tx Hash</span>
-                            <span class="summary-value mono truncate" title="${simulation.txHash}">${simulation.txHash.slice(0, 10)}...${simulation.txHash.slice(-8)}</span>
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">Hash</span>
+                            <span class="tx-field-value mono" title="${simulation.txHash}">${simulation.txHash.slice(0,14)}…${simulation.txHash.slice(-8)}</span>
                             ${createCopyIcon(simulation.txHash).outerHTML}
                             ${getExplorerTxUrl(currentChainId, simulation.txHash) ? `<a href="${getExplorerTxUrl(currentChainId, simulation.txHash)}" target="_blank" rel="noopener noreferrer" class="explorer-link" title="View on explorer">↗</a>` : ''}
                         </div>
                         ` : ''}
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">Gas Used</span>
+                            <span class="tx-field-value">${simulation.gasUsed?.toLocaleString() || 'N/A'}</span>
+                        </div>
+                        <div class="tx-field-row">
+                            <span class="tx-field-label">Value</span>
+                            <span class="tx-field-value">${formatValue(trace?.value) || `0 ${getNativeToken()}`}</span>
+                        </div>
+                        ${feeTokenResolved ? `<div class="tx-field-row"><span class="tx-field-label">Fee Token</span><span class="tx-field-value addr-type-${feeTokenResolved.type}">${feeTokenResolved.label}</span></div>` : ''}
                     </div>
                 </div>
+                ${actionName ? `
+                <div class="tx-actions-list">
+                    <div class="tx-action-item">
+                        <span class="tx-action-num">1.</span>
+                        <span class="tx-action-badge">${actionName}</span>
+                        ${!isBatchTx && recipientResolved ? `<span class="tx-action-target">${recipientResolved.label}</span>` : ''}
+                        ${isBatchTx ? `<span class="tx-action-note">${simulation.callResults?.length || 0} sub-calls</span>` : ''}
+                    </div>
+                </div>` : ''}
                 ${revertDisplay}
             `;
             app.appendChild(summaryCard);
 
-            // Balance changes
-            const balanceChanges = await renderBalanceChanges(simulation);
+            // Balance changes (use txFrom/txTo for correct sender on Tempo)
+            const balanceChanges = await renderBalanceChanges(simulation, senderAddr, recipientAddr);
             if (balanceChanges) {
                 app.appendChild(balanceChanges);
             }
