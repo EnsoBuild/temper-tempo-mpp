@@ -10751,11 +10751,14 @@ name = "temper-server"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives",
+ "base64 0.22.1",
  "bytes",
+ "chrono",
  "dashmap 5.5.3",
  "dotenvy",
  "eyre",
  "hex",
+ "hmac",
  "log",
  "mime_guess",
  "pretty_env_logger",
@@ -10763,6 +10766,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sha3",
  "temp-env",
  "temper-core",
@@ -12705,9 +12709,9 @@ dependencies = [
 
 [[package]]
 name = "xxhash-rust"
-version = "0.8.15"
+version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
+checksum = "550a2b930b62486a393c52d5c3b84bff264b28aa437ed64694d31e93b1757af7"
 
 [[package]]
 name = "yansi"
